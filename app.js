@@ -17,6 +17,9 @@ const defaultMatches = [
 const $ = (selector, scope=document) => scope.querySelector(selector);
 const $$ = (selector, scope=document) => [...scope.querySelectorAll(selector)];
 let currentFile = null;
+let calibrationPoints=[];
+let liveAnalysisResult=null;
+const analysisApi=window.PADELIQ_ANALYSIS_API||localStorage.getItem('padeliqAnalysisApi')||'';
 
 function routeTo(route){
   $$('.page').forEach(page => page.classList.toggle('active', page.id === route));
@@ -66,7 +69,9 @@ function drawHeatmap(){
   const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
   const x=55,y=30,cw=450,ch=610;
   ctx.fillStyle='#65b3d8';ctx.fillRect(x,y,cw,ch);
-  const points=seededPoints($('#heatmapFilter').value);
+  const points=liveAnalysisResult?.positions?.length
+    ? liveAnalysisResult.positions.map(p=>[Math.max(0,Math.min(1,p.x/10)),Math.max(0,Math.min(1,p.y/20)),.48])
+    : seededPoints($('#heatmapFilter').value);
   points.forEach(([px,py,intensity])=>{
     const gx=x+px*cw,gy=y+py*ch,r=110*intensity+45;
     const g=ctx.createRadialGradient(gx,gy,5,gx,gy,r);
@@ -90,7 +95,7 @@ videoInput.addEventListener('change',()=>handleFile(videoInput.files[0]));
 function handleFile(file){
   if(!file) return;
   if(file.type && !file.type.startsWith('video/')){showToast('Please choose a video file');return;}
-  currentFile=file;$('#selectedFile').textContent=file.name;setWorkflow(2);
+  currentFile=file;$('#selectedFile').textContent=file.name;prepareCalibration(file);setWorkflow(2);
 }
 
 function setWorkflow(step){
@@ -99,10 +104,33 @@ function setWorkflow(step){
   $$('.step').forEach(s=>{const n=Number(s.dataset.step);s.classList.toggle('active',n===Math.min(step,3));s.classList.toggle('done',n<step)});
 }
 
-$$('.player-marker').forEach(marker=>marker.addEventListener('click',()=>{ $$('.player-marker').forEach(m=>m.classList.remove('selected'));marker.classList.add('selected');$('#startAnalysis').disabled=false; }));
 $('#startAnalysis').addEventListener('click',()=>{setWorkflow(3);runAnalysis();});
 
+const calibrationLabels=['top-left court corner','top-right court corner','bottom-right court corner','bottom-left court corner','the player you want to analyse'];
+function prepareCalibration(file){
+  calibrationPoints=[];const video=$('#calibrationVideo');
+  if(video.dataset.objectUrl)URL.revokeObjectURL(video.dataset.objectUrl);
+  const objectUrl=URL.createObjectURL(file);video.dataset.objectUrl=objectUrl;video.src=objectUrl;video.currentTime=0;updateCalibration();
+}
+function resizeCalibrationCanvas(){
+  const video=$('#calibrationVideo'),canvas=$('#calibrationCanvas');
+  if(!video.videoWidth)return;canvas.width=video.videoWidth;canvas.height=video.videoHeight;drawCalibration();
+}
+function drawCalibration(){
+  const canvas=$('#calibrationCanvas'),ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(calibrationPoints.length>1){ctx.strokeStyle='#65c8ff';ctx.lineWidth=Math.max(3,canvas.width/300);ctx.beginPath();calibrationPoints.slice(0,4).forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));if(calibrationPoints.length>=4)ctx.closePath();ctx.stroke();}
+  calibrationPoints.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(7,canvas.width/110),0,Math.PI*2);ctx.fillStyle=i===4?'#ffcf5c':'#42b5ef';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();ctx.fillStyle='#102a43';ctx.font=`700 ${Math.max(12,canvas.width/70)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(i+1),p.x,p.y);});
+}
+function updateCalibration(){
+  const count=calibrationPoints.length;$('#calibrationCount').textContent=`${count} of 5 points selected`;$('#calibrationPrompt').textContent=count<5?`Click ${calibrationLabels[count]}`:'Calibration ready';$('#startAnalysis').disabled=count<5;drawCalibration();
+}
+$('#calibrationVideo').addEventListener('loadedmetadata',resizeCalibrationCanvas);
+$('#calibrationVideo').addEventListener('loadeddata',resizeCalibrationCanvas);
+$('#calibrationCanvas').addEventListener('click',event=>{if(calibrationPoints.length>=5)return;const canvas=$('#calibrationCanvas'),rect=canvas.getBoundingClientRect();calibrationPoints.push({x:(event.clientX-rect.left)*canvas.width/rect.width,y:(event.clientY-rect.top)*canvas.height/rect.height});updateCalibration();});
+$('#clearCalibration').addEventListener('click',()=>{calibrationPoints=[];updateCalibration();});
+
 function runAnalysis(){
+  if(analysisApi){runRealAnalysis();return;}
   let progress=0;
   const stages=[['Preparing your footage…','Checking video quality and identifying court lines.'],['Tracking players…','Following your selected player throughout the match.'],['Mapping court positions…','Building movement paths and the coverage heatmap.'],['Classifying shots…','Grouping shot events and estimating outcomes.'],['Creating your report…','Calculating scores and development insights.']];
   const timer=setInterval(()=>{
@@ -110,6 +138,28 @@ function runAnalysis(){
     $('#analysisProgress').style.width=progress+'%';$('#analysisPercent').textContent=progress+'%';$('#analysisHeading').textContent=stages[idx][0];$('#analysisDescription').textContent=stages[idx][1];
     if(progress===100){clearInterval(timer);setTimeout(()=>{saveAnalysedMatch();setWorkflow(4)},500);}
   },120);
+}
+
+async function runRealAnalysis(){
+  try{
+    $('#analysisHeading').textContent='Uploading match securely…';$('#analysisDescription').textContent='Preparing the video-analysis job.';
+    const calibration={corners:calibrationPoints.slice(0,4),player:calibrationPoints[4]};
+    const form=new FormData();form.append('video',currentFile);form.append('calibration',JSON.stringify(calibration));
+    const response=await fetch(`${analysisApi.replace(/\/$/,'')}/jobs`,{method:'POST',body:form});if(!response.ok)throw new Error(await response.text());
+    const job=await response.json();await pollAnalysisJob(job.id);
+  }catch(error){$('#analysisHeading').textContent='Analysis could not start';$('#analysisDescription').textContent=error.message;$('#analysisProgress').style.width='0';}
+}
+async function pollAnalysisJob(jobId){
+  const base=analysisApi.replace(/\/$/,'');
+  while(true){
+    const response=await fetch(`${base}/jobs/${jobId}`);if(!response.ok)throw new Error(await response.text());const job=await response.json();
+    $('#analysisProgress').style.width=`${job.progress}%`;$('#analysisPercent').textContent=`${job.progress}%`;$('#analysisHeading').textContent=job.message;
+    if(job.status==='complete'){applyRealResult(job.result);saveAnalysedMatch();setWorkflow(4);return;}
+    if(job.status==='failed')throw new Error(job.error||'Video analysis failed');await new Promise(resolve=>setTimeout(resolve,2500));
+  }
+}
+function applyRealResult(result){
+  liveAnalysisResult=result;const summary=result.summary;$('#distanceStat').textContent=`${Math.round(summary.distance_metres)}m`;$('#distanceContext').textContent=`Average ${summary.average_speed_kmh} km/h · max ${summary.maximum_speed_kmh} km/h`;$('#coverageStat').textContent=`${summary.tracking_coverage_percent}%`;$('#coverageContext').textContent=`${summary.tracked_frames} of ${summary.analysed_frames} sampled frames`;drawHeatmap();
 }
 
 function saveAnalysedMatch(){
@@ -120,7 +170,7 @@ function saveAnalysedMatch(){
 }
 
 $('#viewReport').addEventListener('click',()=>{routeTo('dashboard');showToast('Your latest match has been added');resetUpload();});
-function resetUpload(){currentFile=null;videoInput.value='';$('#startAnalysis').disabled=true;$$('.player-marker').forEach(m=>m.classList.remove('selected'));$('#analysisProgress').style.width='0';$('#analysisPercent').textContent='0%';setWorkflow(1);}
+function resetUpload(){currentFile=null;videoInput.value='';calibrationPoints=[];$('#startAnalysis').disabled=true;$('#analysisProgress').style.width='0';$('#analysisPercent').textContent='0%';setWorkflow(1);}
 
 function initials(name){return name.trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()).join('')||'P';}
 function loadProfile(){

@@ -1,3 +1,7 @@
 .DS_Store
 .vercel
 *.zip
+.venv/
+__pycache__/
+.pytest_cache/
+analysis-worker/model-cache/

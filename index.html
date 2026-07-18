@@ -98,8 +98,8 @@
         <div class="stat-grid">
           <article class="stat-card"><span class="stat-icon green">◉</span><div><small>MATCHES ANALYSED</small><strong id="matchesCount">6</strong><p>2 this month</p></div></article>
           <article class="stat-card"><span class="stat-icon violet">⌁</span><div><small>SHOTS TRACKED</small><strong id="shotsCount">1,248</strong><p>Across 10 shot types</p></div></article>
-          <article class="stat-card"><span class="stat-icon orange">↯</span><div><small>AVG. REACTION</small><strong>0.68s</strong><p class="positive">↓ 0.05s improving</p></div></article>
-          <article class="stat-card"><span class="stat-icon blue">◇</span><div><small>COURT COVERAGE</small><strong>74%</strong><p class="positive">↑ 6% vs last match</p></div></article>
+          <article class="stat-card"><span class="stat-icon orange">↯</span><div><small>DISTANCE TRAVELLED</small><strong id="distanceStat">—</strong><p id="distanceContext">Available after real tracking</p></div></article>
+          <article class="stat-card"><span class="stat-icon blue">◇</span><div><small>TRACKING COVERAGE</small><strong id="coverageStat">—</strong><p id="coverageContext">Measured frames successfully tracked</p></div></article>
         </div>
 
         <div class="two-column">
@@ -130,13 +130,12 @@
         </div>
         <div id="playerStep" class="workflow-card hidden">
           <div class="workflow-head"><div><p class="eyebrow">IDENTIFY YOURSELF</p><h2>Which player are you?</h2><p>Select your position on the court. You can correct tracking later.</p></div><span id="selectedFile" class="file-pill"></span></div>
-          <div class="player-court" aria-label="Select your starting court position">
-            <div class="court-net"></div>
-            <button class="player-marker" style="--x:26%;--y:24%" data-player="1"><span>1</span></button>
-            <button class="player-marker" style="--x:70%;--y:28%" data-player="2"><span>2</span></button>
-            <button class="player-marker" style="--x:28%;--y:72%" data-player="3"><span>3</span></button>
-            <button class="player-marker" style="--x:72%;--y:76%" data-player="4"><span>4</span></button>
+          <div class="calibration-instructions"><strong id="calibrationPrompt">Click the top-left court corner</strong><span id="calibrationCount">0 of 5 points selected</span></div>
+          <div class="calibration-stage" id="calibrationStage">
+            <video id="calibrationVideo" controls muted playsinline aria-label="Uploaded match calibration frame"></video>
+            <canvas id="calibrationCanvas" aria-label="Court and player selection overlay"></canvas>
           </div>
+          <button id="clearCalibration" class="secondary-button" type="button">Clear points</button>
           <button id="startAnalysis" class="primary-button wide" disabled>Start analysis</button>
         </div>
         <div id="analysisStep" class="workflow-card analysis-state hidden">
@@ -144,7 +143,7 @@
           <div class="progress-track"><span id="analysisProgress"></span></div><strong id="analysisPercent">0%</strong>
         </div>
         <div id="completeStep" class="workflow-card analysis-state hidden">
-          <div class="complete-icon">✓</div><p class="eyebrow">MATCH READY</p><h2>Your report is ready</h2><p>We found 214 shots and generated your movement and court-position analysis.</p><button id="viewReport" class="primary-button">View match report</button>
+          <div class="complete-icon">✓</div><p class="eyebrow">MATCH READY</p><h2>Your report is ready</h2><p>Your selected-player movement, court positions and coverage heatmap are ready.</p><button id="viewReport" class="primary-button">View match report</button>
         </div>
       </section>
 
