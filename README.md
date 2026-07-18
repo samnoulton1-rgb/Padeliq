@@ -27,6 +27,8 @@ Then visit `http://localhost:8000`.
 - Browser persistence using `localStorage`
 - Court calibration and selected-player identification from the uploaded video
 - Optional real analysis-worker integration for RT-DETR/ByteTrack position tracking
+- Match name, date played, venue and court-number metadata
+- Removal controls for selected videos, individual reports/scores and all match data
 
 The prototype deliberately does not upload or process the selected video. Accounts now use Supabase authentication; match data and profiles still use local browser storage. Those remaining boundaries can later be replaced with authenticated Supabase storage, database tables, a job queue, and Python computer-vision workers.
 

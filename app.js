@@ -6,12 +6,12 @@ const shots = [
   {name:'Chiquita', attempts:13, success:62, score:62, icon:'C'}
 ];
 const defaultMatches = [
-  {date:'14', month:'JUL', title:'Club match · Court 2', detail:'1h 18m · 214 shots · Complete', score:78},
-  {date:'05', month:'JUL', title:'League match · Riverside', detail:'1h 32m · 246 shots · Complete', score:75},
-  {date:'21', month:'JUN', title:'Training match · Court 1', detail:'58m · 177 shots · Complete', score:73},
-  {date:'08', month:'JUN', title:'Club match · Court 3', detail:'1h 24m · 221 shots · Complete', score:71},
-  {date:'26', month:'MAY', title:'Friendly · Central Padel', detail:'1h 11m · 198 shots · Complete', score:69},
-  {date:'10', month:'MAY', title:'Training match · Court 4', detail:'52m · 192 shots · Complete', score:67}
+  {id:'demo-1',date:'14', month:'JUL', title:'Club match · Court 2', detail:'1h 18m · 214 shots · Complete', score:78},
+  {id:'demo-2',date:'05', month:'JUL', title:'League match · Riverside', detail:'1h 32m · 246 shots · Complete', score:75},
+  {id:'demo-3',date:'21', month:'JUN', title:'Training match · Court 1', detail:'58m · 177 shots · Complete', score:73},
+  {id:'demo-4',date:'08', month:'JUN', title:'Club match · Court 3', detail:'1h 24m · 221 shots · Complete', score:71},
+  {id:'demo-5',date:'26', month:'MAY', title:'Friendly · Central Padel', detail:'1h 11m · 198 shots · Complete', score:69},
+  {id:'demo-6',date:'10', month:'MAY', title:'Training match · Court 4', detail:'52m · 192 shots · Complete', score:67}
 ];
 
 const $ = (selector, scope=document) => scope.querySelector(selector);
@@ -19,6 +19,7 @@ const $$ = (selector, scope=document) => [...scope.querySelectorAll(selector)];
 let currentFile = null;
 let calibrationPoints=[];
 let liveAnalysisResult=null;
+let currentMatchMeta=null;
 const analysisApi=window.PADELIQ_ANALYSIS_API||localStorage.getItem('padeliqAnalysisApi')||'';
 
 function routeTo(route){
@@ -42,10 +43,21 @@ function renderShots(){
 
 function renderMatches(){
   const custom = JSON.parse(localStorage.getItem('padeliqMatches') || '[]');
-  const matches = [...custom, ...defaultMatches];
-  $('#matchList').innerHTML = matches.map(m => `<article class="match-card"><div class="match-date">${m.date}<small>${m.month}</small></div><div><h3>${m.title}</h3><p>${m.detail}</p></div><div class="match-score"><strong>${m.score}</strong><small>OVERALL</small></div><button class="secondary-button" data-view-match>View report</button></article>`).join('');
+  const deletedDemo=JSON.parse(localStorage.getItem('padeliqDeletedDemoMatches')||'[]');
+  const demo=defaultMatches.filter(match=>!deletedDemo.includes(match.id));
+  const matches = [...custom, ...demo];
+  $('#matchList').innerHTML = matches.length?matches.map((m,index) => `<article class="match-card"><div class="match-date">${m.date}<small>${m.month}</small></div><div><h3>${m.title}</h3><p>${m.place?`${m.place}${m.court?` · ${m.court}`:''} · `:''}${m.detail}</p></div><div class="match-score"><strong>${m.score}</strong><small>OVERALL</small></div><div class="match-actions"><button class="secondary-button" data-view-match>View report</button><button class="danger-button" data-delete-match="${index<custom.length?`custom:${index}`:`demo:${m.id}`}" aria-label="Delete ${m.title}">Delete</button></div></article>`).join(''):'<div class="panel"><h2>No saved matches</h2><p>Upload a match to create your first report.</p></div>';
   $('#matchesCount').textContent = matches.length;
   $$('[data-view-match]').forEach(button => button.addEventListener('click', () => { routeTo('dashboard'); showToast('Showing the selected match report'); }));
+  $$('[data-delete-match]').forEach(button=>button.addEventListener('click',()=>deleteMatch(button.dataset.deleteMatch)));
+}
+
+function deleteMatch(target){
+  const [type,value]=target.split(':'),custom=JSON.parse(localStorage.getItem('padeliqMatches')||'[]');
+  const match=type==='custom'?custom[Number(value)]:defaultMatches.find(item=>item.id===value);if(!match)return;
+  if(!window.confirm(`Delete “${match.title}” and its report and score? This cannot be undone.`))return;
+  if(type==='custom'){custom.splice(Number(value),1);localStorage.setItem('padeliqMatches',JSON.stringify(custom));}else{const deleted=JSON.parse(localStorage.getItem('padeliqDeletedDemoMatches')||'[]');if(!deleted.includes(value))deleted.push(value);localStorage.setItem('padeliqDeletedDemoMatches',JSON.stringify(deleted));}
+  renderMatches();showToast('Match report and score deleted');
 }
 
 function renderTrend(){
@@ -95,6 +107,9 @@ videoInput.addEventListener('change',()=>handleFile(videoInput.files[0]));
 function handleFile(file){
   if(!file) return;
   if(file.type && !file.type.startsWith('video/')){showToast('Please choose a video file');return;}
+  const name=$('#matchName').value.trim(),date=$('#matchDate').value,place=$('#matchPlace').value.trim(),court=$('#matchCourt').value.trim();
+  if(!name||!date||!place||!court){showToast('Add the match name, date, place and court number first');videoInput.value='';return;}
+  currentMatchMeta={name,date,place,court};
   currentFile=file;$('#selectedFile').textContent=file.name;prepareCalibration(file);setWorkflow(2);
 }
 
@@ -128,6 +143,7 @@ $('#calibrationVideo').addEventListener('loadedmetadata',resizeCalibrationCanvas
 $('#calibrationVideo').addEventListener('loadeddata',resizeCalibrationCanvas);
 $('#calibrationCanvas').addEventListener('click',event=>{if(calibrationPoints.length>=5)return;const canvas=$('#calibrationCanvas'),rect=canvas.getBoundingClientRect();calibrationPoints.push({x:(event.clientX-rect.left)*canvas.width/rect.width,y:(event.clientY-rect.top)*canvas.height/rect.height});updateCalibration();});
 $('#clearCalibration').addEventListener('click',()=>{calibrationPoints=[];updateCalibration();});
+$('#removeVideo').addEventListener('click',()=>{if(currentFile&&!window.confirm('Remove this selected video and cancel its analysis?'))return;resetUpload();showToast('Selected video removed');});
 
 function runAnalysis(){
   if(analysisApi){runRealAnalysis();return;}
@@ -163,14 +179,15 @@ function applyRealResult(result){
 }
 
 function saveAnalysedMatch(){
-  const now=new Date(), months=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const selectedDate=currentMatchMeta?.date?new Date(`${currentMatchMeta.date}T12:00:00`):new Date(), months=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const custom=JSON.parse(localStorage.getItem('padeliqMatches')||'[]');
-  custom.unshift({date:String(now.getDate()).padStart(2,'0'),month:months[now.getMonth()],title:currentFile?.name||'Uploaded match',detail:'1h 18m · 214 shots · Analysis complete',score:78});
+  const summary=liveAnalysisResult?.summary;
+  custom.unshift({id:crypto.randomUUID?.()||String(Date.now()),date:String(selectedDate.getDate()).padStart(2,'0'),month:months[selectedDate.getMonth()],isoDate:currentMatchMeta?.date,title:currentMatchMeta?.name||currentFile?.name||'Uploaded match',place:currentMatchMeta?.place||'',court:currentMatchMeta?.court||'',detail:summary?`${Math.round(summary.duration_seconds/60)}m · ${Math.round(summary.distance_metres)}m travelled · Analysis complete`:'1h 18m · Demonstration analysis',score:78,result:liveAnalysisResult||null});
   localStorage.setItem('padeliqMatches',JSON.stringify(custom));renderMatches();
 }
 
 $('#viewReport').addEventListener('click',()=>{routeTo('dashboard');showToast('Your latest match has been added');resetUpload();});
-function resetUpload(){currentFile=null;videoInput.value='';calibrationPoints=[];$('#startAnalysis').disabled=true;$('#analysisProgress').style.width='0';$('#analysisPercent').textContent='0%';setWorkflow(1);}
+function resetUpload(){const video=$('#calibrationVideo');if(video.dataset.objectUrl)URL.revokeObjectURL(video.dataset.objectUrl);video.removeAttribute('src');video.load();currentFile=null;currentMatchMeta=null;videoInput.value='';calibrationPoints=[];$('#startAnalysis').disabled=true;$('#analysisProgress').style.width='0';$('#analysisPercent').textContent='0%';setWorkflow(1);}
 
 function initials(name){return name.trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()).join('')||'P';}
 function loadProfile(){
@@ -214,6 +231,7 @@ $$('[data-auth]').forEach(button=>button.addEventListener('click',()=>showAuth(b
 $$('[data-switch-auth]').forEach(button=>button.addEventListener('click',()=>switchAuth(button.dataset.switchAuth)));
 $('#backHome').addEventListener('click',showLanding);
 $('#logoutButton').addEventListener('click',async()=>{await supabaseClient.auth.signOut();showLanding();});
+$('#deleteAllMatches').addEventListener('click',()=>{if(!window.confirm('Delete every saved match report, score and analysis result from this browser? This cannot be undone.'))return;localStorage.removeItem('padeliqMatches');localStorage.setItem('padeliqDeletedDemoMatches',JSON.stringify(defaultMatches.map(match=>match.id)));liveAnalysisResult=null;renderMatches();$('#distanceStat').textContent='—';$('#distanceContext').textContent='Available after real tracking';$('#coverageStat').textContent='—';$('#coverageContext').textContent='Measured frames successfully tracked';drawHeatmap();showToast('All match data deleted');});
 
 $('#signupForm').addEventListener('submit',async e=>{
   e.preventDefault();const email=$('#signupEmail').value.trim().toLowerCase(),password=$('#signupPassword').value,name=$('#signupName').value.trim();
@@ -236,5 +254,6 @@ $('#resetForm').addEventListener('submit',async e=>{
 $('#recoveryForm').addEventListener('submit',async e=>{e.preventDefault();const {error}=await supabaseClient.auth.updateUser({password:$('#recoveryPassword').value});if(error){$('#recoveryError').textContent=error.message;return;}$('#recoveryError').classList.add('auth-success');$('#recoveryError').textContent='Password updated successfully.';setTimeout(async()=>{const {data}=await supabaseClient.auth.getUser();showApp(data.user);},900);});
 
 renderShots();renderMatches();renderTrend();loadProfile();applyLanguage(localStorage.getItem('padeliqLanguage')||'en');
+$('#matchDate').valueAsDate=new Date();
 supabaseClient.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY'){showAuth('recovery');}else if(event==='SIGNED_IN'&&session?.user){showApp(session.user);}});
 supabaseClient.auth.getSession().then(({data})=>{if(data.session?.user)showApp(data.session.user);else showLanding();});

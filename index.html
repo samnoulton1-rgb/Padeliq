@@ -122,6 +122,12 @@
         <div class="page-head compact"><div><p class="eyebrow">NEW ANALYSIS</p><h1 id="uploadTitle" data-i18n="uploadMatch">Upload your match</h1><p>Use fixed, full-court footage for the most accurate result.</p></div></div>
         <div class="stepper" aria-label="Upload progress"><div class="step active" data-step="1"><span>1</span>Video</div><i></i><div class="step" data-step="2"><span>2</span>Select player</div><i></i><div class="step" data-step="3"><span>3</span>Analyse</div></div>
         <div id="uploadStep" class="workflow-card">
+          <div class="match-details-grid">
+            <label>Match name<input id="matchName" type="text" placeholder="e.g. Friday league match" required></label>
+            <label>Date played<input id="matchDate" type="date" required></label>
+            <label>Place of play<input id="matchPlace" type="text" placeholder="e.g. Riverside Padel Club" required></label>
+            <label>Court number<input id="matchCourt" type="text" placeholder="e.g. Court 3" required></label>
+          </div>
           <label class="drop-zone" id="dropZone" for="videoInput">
             <input id="videoInput" type="file" accept="video/*" hidden>
             <span class="upload-symbol">↑</span><h2>Drop your match video here</h2><p>or click to choose a file</p><small>MP4, MOV or WebM · Up to 5 GB · 1080p recommended</small>
@@ -135,7 +141,7 @@
             <video id="calibrationVideo" controls muted playsinline aria-label="Uploaded match calibration frame"></video>
             <canvas id="calibrationCanvas" aria-label="Court and player selection overlay"></canvas>
           </div>
-          <button id="clearCalibration" class="secondary-button" type="button">Clear points</button>
+          <div class="workflow-actions"><button id="removeVideo" class="danger-button" type="button">Remove video</button><button id="clearCalibration" class="secondary-button" type="button">Clear points</button></div>
           <button id="startAnalysis" class="primary-button wide" disabled>Start analysis</button>
         </div>
         <div id="analysisStep" class="workflow-card analysis-state hidden">
@@ -169,6 +175,7 @@
           <label>Primary goal<select><option>Improve overall game</option><option>Reduce unforced errors</option><option>Improve net play</option><option>Improve defence</option></select></label>
           <button class="primary-button" type="submit">Save profile</button><span id="profileSaved" class="save-message" aria-live="polite"></span>
         </form>
+        <section class="danger-zone panel" aria-labelledby="dataControlsTitle"><div><p class="eyebrow">DATA CONTROLS</p><h2 id="dataControlsTitle">Match data</h2><p>Remove all saved match reports, scores and analysis results from this browser.</p></div><button id="deleteAllMatches" class="danger-button" type="button">Delete all match data</button></section>
       </section>
     </main>
   </div>
