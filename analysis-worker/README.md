@@ -1,6 +1,6 @@
 # PadelIQ analysis worker
 
-An initial commercially friendly video-analysis service for court calibration, selected-player tracking, court positions, movement heatmaps, distance and recovery-position proxies.
+An initial commercially friendly video-analysis service for court calibration, selected-player tracking, court positions, movement heatmaps, distance and recovery-position proxies. An optional Qwen3-VL layer turns sampled frames and measured metrics into cautious coaching feedback.
 
 ## Open-source components
 
@@ -9,6 +9,7 @@ An initial commercially friendly video-analysis service for court calibration, s
 - ByteTrack through Supervision — MIT
 - PyTorch — BSD-style
 - Transformers — Apache 2.0
+- Qwen3-VL-2B-Instruct — Apache 2.0
 
 Keep all dependency licence and notice files in production distributions. Do not substitute Ultralytics models without reviewing their AGPL/commercial terms.
 
@@ -18,6 +19,7 @@ Keep all dependency licence and notice files in production distributions. Do not
 docker build -t padeliq-analysis .
 docker run --rm -p 8080:8080 \
   -e ALLOWED_ORIGINS=https://your-app.vercel.app \
+  -e ENABLE_VIDEO_LLM=true \
   padeliq-analysis
 ```
 
@@ -25,3 +27,4 @@ docker run --rm -p 8080:8080 \
 
 The current in-memory job store is suitable for a controlled prototype. Production requires object storage, a persistent queue/database, authentication, file limits and scheduled deletion of raw footage.
 
+The 2B video-language model is intended for prototype feedback. It does not yet make reliable shot-by-shot calls; those require a labelled padel dataset and a dedicated temporal classifier. On free CPU hosting, the first model download and each inference can take several minutes.

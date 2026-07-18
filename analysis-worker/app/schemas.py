@@ -29,12 +29,23 @@ class AnalysisSummary(BaseModel):
     recovery_within_two_seconds_percent: float | None
 
 
+class AIFeedback(BaseModel):
+    summary: str
+    strengths: list[str] = []
+    improvements: list[str] = []
+    observations: list[str] = []
+    confidence: str = "medium"
+    model: str
+    disclaimer: str = "AI coaching is an estimate from sampled video frames and tracking data; review important decisions with a qualified coach."
+
+
 class AnalysisResult(BaseModel):
-    version: str = "0.1"
+    version: str = "0.2"
     summary: AnalysisSummary
     positions: list[dict[str, float]]
     heatmap: list[list[float]]
     warnings: list[str]
+    ai_feedback: AIFeedback | None = None
 
 
 class JobState(BaseModel):
@@ -44,4 +55,3 @@ class JobState(BaseModel):
     message: str = "Queued"
     result: AnalysisResult | None = None
     error: str | None = None
-

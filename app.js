@@ -175,8 +175,16 @@ async function pollAnalysisJob(jobId){
   }
 }
 function applyRealResult(result){
-  liveAnalysisResult=result;const summary=result.summary;$('#distanceStat').textContent=`${Math.round(summary.distance_metres)}m`;$('#distanceContext').textContent=`Average ${summary.average_speed_kmh} km/h · max ${summary.maximum_speed_kmh} km/h`;$('#coverageStat').textContent=`${summary.tracking_coverage_percent}%`;$('#coverageContext').textContent=`${summary.tracked_frames} of ${summary.analysed_frames} sampled frames`;drawHeatmap();
+  liveAnalysisResult=result;const summary=result.summary;$('#distanceStat').textContent=`${Math.round(summary.distance_metres)}m`;$('#distanceContext').textContent=`Average ${summary.average_speed_kmh} km/h · max ${summary.maximum_speed_kmh} km/h`;$('#coverageStat').textContent=`${summary.tracking_coverage_percent}%`;$('#coverageContext').textContent=`${summary.tracked_frames} of ${summary.analysed_frames} sampled frames`;renderAiFeedback(result.ai_feedback);drawHeatmap();
 }
+function renderAiFeedback(feedback){
+  const panel=$('#aiFeedbackPanel');if(!feedback){panel.hidden=true;return;}panel.hidden=false;
+  $('#aiSummary').textContent=feedback.summary;$('#aiConfidence').textContent=`${feedback.confidence} confidence`;
+  $('#aiStrengths').innerHTML=(feedback.strengths||[]).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
+  $('#aiImprovements').innerHTML=(feedback.improvements||[]).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
+  $('#aiDisclaimer').textContent=feedback.disclaimer||'';
+}
+function escapeHtml(value){const element=document.createElement('span');element.textContent=value;return element.innerHTML;}
 
 function saveAnalysedMatch(){
   const selectedDate=currentMatchMeta?.date?new Date(`${currentMatchMeta.date}T12:00:00`):new Date(), months=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
