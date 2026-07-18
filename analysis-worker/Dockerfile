@@ -4,7 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MODEL_ID=PekingU/rtdetr_r50vd \
     VLM_MODEL_ID=Qwen/Qwen3-VL-2B-Instruct \
-    ENABLE_VIDEO_LLM=true
+    ENABLE_VIDEO_LLM=true \
+    ALLOWED_ORIGINS=https://g-p-6a5b7d751cf48191a652db596eaa1dc.vercel.app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libglib2.0-0 libgl1 && \

@@ -1,3 +1,13 @@
+---
+title: PadelIQ Analysis
+emoji: 🎾
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 8080
+pinned: false
+---
+
 # PadelIQ analysis worker
 
 An initial commercially friendly video-analysis service for court calibration, selected-player tracking, court positions, movement heatmaps, distance and recovery-position proxies. An optional Qwen3-VL layer turns sampled frames and measured metrics into cautious coaching feedback.
