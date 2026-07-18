@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PadelIQ match analysis prototype">
+  <title>PadelIQ — Match analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <section id="landing" class="landing-view">
+    <header class="landing-nav">
+      <a class="brand landing-brand" href="#"><span class="brand-mark">P</span><span>Padel<span>IQ</span></span></a>
+      <nav class="landing-links" aria-label="Homepage navigation">
+        <a href="#features" data-i18n="navFeatures">Features</a>
+        <a href="#how-it-works" data-i18n="navHow">How it works</a>
+        <a href="#pricing" data-i18n="navPricing">Pricing</a>
+      </nav>
+      <div class="landing-actions">
+        <label class="language-control"><span class="sr-only">Language</span><select class="language-select" aria-label="Language"><option value="en">EN</option><option value="es">ES</option><option value="el">EL</option><option value="de">DE</option><option value="nl">NL</option><option value="fr">FR</option><option value="it">IT</option></select></label>
+        <button class="ghost-button" data-auth="signin" data-i18n="signIn">Sign in</button>
+        <button class="primary-button blue-button" data-auth="signup" data-i18n="startFree">Start free</button>
+      </div>
+    </header>
+    <main class="landing-main">
+      <section class="landing-hero">
+        <div class="hero-copy"><span class="landing-pill" data-i18n="aiCoach">YOUR AI PADEL COACH</span><h1 data-i18n-html="heroTitle">See your game.<br><em>Play it better.</em></h1><p data-i18n="heroText">Turn match footage into clear, personalised insights. Understand every shot, movement and decision—then track your progress over time.</p><div class="hero-cta"><button class="primary-button blue-button large-button" data-auth="signup" data-i18n="analyseFirst">Analyse your first match</button><a href="#how-it-works" data-i18n="seeHow">See how it works ↓</a></div><div class="trust-row"><span>✓ <b data-i18n="noCard">No card required</b></span><span>✓ <b data-i18n="freeMatch">First match free</b></span><span>✓ <b data-i18n="privacy">Private by design</b></span></div></div>
+        <div class="product-preview" aria-label="PadelIQ performance preview"><div class="preview-top"><span>Match analysis</span><strong>78 <small>/100</small></strong></div><div class="preview-court"><div class="preview-heat h1"></div><div class="preview-heat h2"></div><span class="preview-net"></span></div><div class="preview-stats"><span><b>86%</b>Lob success</span><span><b>0.68s</b>Reaction</span><span><b>74%</b>Coverage</span></div></div>
+      </section>
+      <section id="features" class="landing-section"><p class="section-kicker" data-i18n="builtImprove">BUILT TO HELP YOU IMPROVE</p><h2 data-i18n="everythingTitle">Everything your match can teach you</h2><p class="section-intro" data-i18n="everythingText">PadelIQ turns complex match footage into coaching insights you can act on.</p><div class="feature-grid"><article><span>◉</span><h3 data-i18n="shotAnalysis">Shot analysis</h3><p data-i18n="shotAnalysisText">See success rates and scores for lobs, volleys, bandejas, víboras, smashes and more.</p></article><article><span>⌖</span><h3 data-i18n="coverageMaps">Court coverage maps</h3><p data-i18n="coverageMapsText">Understand where you influence play, where gaps appear and how efficiently you recover.</p></article><article><span>↗</span><h3 data-i18n="progressTracking">Progress tracking</h3><p data-i18n="progressTrackingText">Compare matches and see which areas of your game are improving over time.</p></article><article><span>✦</span><h3 data-i18n="coachingInsights">Coaching insights</h3><p data-i18n="coachingInsightsText">Get clear strengths, priorities and practical recommendations for your next session.</p></article></div></section>
+      <section id="how-it-works" class="landing-section process-section"><p class="section-kicker" data-i18n="simpleProcess">A SIMPLE PROCESS</p><h2 data-i18n="threeSteps">From footage to feedback in three steps</h2><div class="process-grid"><article><b>01</b><h3 data-i18n="uploadMatch">Upload your match</h3><p data-i18n="uploadMatchText">Add fixed-camera footage with the full court visible.</p></article><article><b>02</b><h3 data-i18n="selectYourself">Select yourself</h3><p data-i18n="selectYourselfText">Click your position once so PadelIQ knows who to follow.</p></article><article><b>03</b><h3 data-i18n="getReport">Get your report</h3><p data-i18n="getReportText">Explore shot scores, heatmaps, movement and improvement priorities.</p></article></div></section>
+      <section id="pricing" class="landing-section pricing-section"><p class="section-kicker" data-i18n="simplePricing">SIMPLE PRICING</p><h2 data-i18n="choosePlan">Choose how deeply you want to improve</h2><div class="pricing-grid"><article><p class="plan-name" data-i18n="starter">Starter</p><h3>£0 <small data-i18n="forever">forever</small></h3><p data-i18n="starterDesc">Try PadelIQ with your first match.</p><ul><li data-i18n="oneAnalysis">1 match analysis</li><li data-i18n="basicScores">Basic shot scores</li><li data-i18n="positionHeatmap">Position heatmap</li></ul><button class="secondary-button" data-auth="signup" data-i18n="startFree">Start free</button></article><article class="popular-plan"><span class="popular-label" data-i18n="mostPopular">MOST POPULAR</span><p class="plan-name">Player</p><h3>£9 <small data-i18n="perMonth">per month</small></h3><p data-i18n="playerDesc">Build a complete picture of your game.</p><ul><li data-i18n="threeAnalyses">3 analyses each month</li><li data-i18n="allShotScores">All shot and movement scores</li><li data-i18n="fullHeatmaps">Full court-coverage heatmaps</li><li data-i18n="longTerm">Long-term progress tracking</li></ul><button class="primary-button blue-button" data-auth="signup" data-i18n="choosePlayer">Choose Player</button></article><article><p class="plan-name">Pro</p><h3>£19 <small data-i18n="perMonth">per month</small></h3><p data-i18n="proDesc">For committed players and coaches.</p><ul><li data-i18n="unlimited">Unlimited analyses</li><li data-i18n="advancedInsights">Advanced tactical insights</li><li data-i18n="clipsReports">Shot clips and reports</li><li data-i18n="priority">Priority processing</li></ul><button class="secondary-button" data-auth="signup" data-i18n="choosePro">Choose Pro</button></article></div></section>
+    </main>
+    <footer class="landing-footer"><a class="brand landing-brand" href="#"><span class="brand-mark">P</span><span>Padel<span>IQ</span></span></a><p data-i18n="footerText">Smarter analysis. Better padel.</p><small>© 2026 PadelIQ</small></footer>
+  </section>
+
+  <section id="authView" class="auth-view hidden" aria-labelledby="authTitle">
+    <button id="backHome" class="back-button">← <span data-i18n="backHome">Back to home</span></button>
+    <div class="auth-layout"><div class="auth-message"><a class="brand landing-brand" href="#"><span class="brand-mark">P</span><span>Padel<span>IQ</span></span></a><h1 data-i18n="authMessage">Your next level starts with understanding your game.</h1><div class="auth-quote"><p data-i18n="authQuote">“The heatmap showed me why I was always late recovering to the net.”</p><span>— Jamie, intermediate player</span></div></div>
+      <div class="auth-card">
+        <form id="signupForm" class="auth-form"><p class="eyebrow" data-i18n="createAccount">CREATE ACCOUNT</p><h2 id="authTitle" data-i18n="startJourney">Start your PadelIQ journey</h2><p data-i18n="alreadyAccount">Already have an account? <button type="button" class="inline-link" data-switch-auth="signin">Sign in</button></p><label><span data-i18n="fullName">Full name</span><input id="signupName" type="text" autocomplete="name" required></label><label><span data-i18n="emailAddress">Email address</span><input id="signupEmail" type="email" autocomplete="email" required></label><label><span data-i18n="password">Password</span><input id="signupPassword" type="password" autocomplete="new-password" minlength="8" required><small data-i18n="passwordHint">At least 8 characters</small></label><label class="terms-check"><input type="checkbox" required><span data-i18n="agreeTerms">I agree to the Terms and Privacy Policy</span></label><button class="primary-button blue-button wide" type="submit" data-i18n="createMyAccount">Create my account</button><p class="auth-error" id="signupError" role="alert"></p></form>
+        <form id="signinForm" class="auth-form hidden"><p class="eyebrow" data-i18n="welcomeBack">WELCOME BACK</p><h2 data-i18n="signInAccount">Sign in to your account</h2><p data-i18n="newPadel">New to PadelIQ? <button type="button" class="inline-link" data-switch-auth="signup">Create an account</button></p><label><span data-i18n="emailAddress">Email address</span><input id="signinEmail" type="email" autocomplete="email" required></label><label><span data-i18n="password">Password</span><input id="signinPassword" type="password" autocomplete="current-password" required></label><button type="button" class="inline-link reset-link" data-switch-auth="reset" data-i18n="forgotPassword">Forgot your password?</button><button class="primary-button blue-button wide" type="submit" data-i18n="signIn">Sign in</button><p class="auth-error" id="signinError" role="alert"></p></form>
+        <form id="resetForm" class="auth-form hidden"><p class="eyebrow" data-i18n="passwordReset">PASSWORD RESET</p><h2 data-i18n="resetPassword">Reset your password</h2><p data-i18n="resetText">Enter your account email and we’ll send you a secure reset link.</p><label><span data-i18n="emailAddress">Email address</span><input id="resetEmail" type="email" autocomplete="email" required></label><button class="primary-button blue-button wide" type="submit">Send reset link</button><button type="button" class="inline-link" data-switch-auth="signin" data-i18n="backSignIn">Back to sign in</button><p class="auth-error" id="resetError" role="alert"></p></form>
+        <form id="recoveryForm" class="auth-form hidden"><p class="eyebrow" data-i18n="passwordReset">PASSWORD RESET</p><h2 data-i18n="newPassword">Choose a new password</h2><p>Your reset link has been verified. Choose a new password for your account.</p><label><span data-i18n="newPassword">New password</span><input id="recoveryPassword" type="password" autocomplete="new-password" minlength="8" required></label><button class="primary-button blue-button wide" type="submit" data-i18n="updatePassword">Update password</button><p class="auth-error" id="recoveryError" role="alert"></p></form>
+      </div>
+    </div>
+  </section>
+
+  <div class="app-shell hidden" id="appShell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#" data-route="dashboard" aria-label="PadelIQ home">
+        <span class="brand-mark">P</span><span>Padel<span>IQ</span></span>
+      </a>
+      <nav>
+        <button class="nav-link active" data-route="dashboard"><span class="nav-icon">⌂</span><span data-i18n="overview">Overview</span></button>
+        <button class="nav-link" data-route="upload"><span class="nav-icon">＋</span><span data-i18n="analyseMatch">Analyse match</span></button>
+        <button class="nav-link" data-route="matches"><span class="nav-icon">▤</span><span data-i18n="myMatches">My matches</span></button>
+        <button class="nav-link" data-route="progress"><span class="nav-icon">↗</span><span data-i18n="progress">Progress</span></button>
+        <button class="nav-link" data-route="profile"><span class="nav-icon">○</span><span data-i18n="profile">Profile</span></button>
+      </nav>
+      <div class="sidebar-card">
+        <div class="mini-orbit">AI</div>
+        <strong>Improve your game</strong>
+        <p>Upload your next match and uncover patterns you can't see from the court.</p>
+        <button class="text-button" data-route="upload">Analyse a match →</button>
+      </div>
+      <div class="user-chip">
+        <div class="avatar" id="navAvatar">AS</div>
+        <div><strong id="navName">Alex Smith</strong><small>Competitive player</small></div>
+      </div>
+      <button id="logoutButton" class="logout-button" data-i18n="logOut">Log out</button>
+    </aside>
+
+    <main>
+      <header class="mobile-header">
+        <a class="brand" href="#" data-route="dashboard"><span class="brand-mark">P</span><span>Padel<span>IQ</span></span></a>
+        <button id="menuButton" class="icon-button" aria-label="Open navigation" aria-expanded="false">☰</button>
+      </header>
+      <div class="app-language"><select class="language-select" aria-label="Language"><option value="en">English</option><option value="es">Español</option><option value="el">Ελληνικά</option><option value="de">Deutsch</option><option value="nl">Nederlands</option><option value="fr">Français</option><option value="it">Italiano</option></select></div>
+
+      <section id="dashboard" class="page active" aria-labelledby="dashboardTitle">
+        <div class="page-head">
+          <div><p class="eyebrow">PLAYER OVERVIEW</p><h1 id="dashboardTitle">Good morning, <span id="welcomeName">Alex</span></h1><p>Here’s how your game is developing.</p></div>
+          <button class="primary-button" data-route="upload">＋ <span data-i18n="analyseMatch">Analyse match</span></button>
+        </div>
+
+        <div class="score-hero">
+          <div class="overall-score">
+            <div class="score-ring" style="--score:78"><div><strong id="overallScore">78</strong><small>OVERALL</small></div></div>
+            <div><span class="positive-pill">↑ 4 pts</span><h2>Your game is trending up</h2><p>Strong net play is lifting your score. Focus next on defensive recovery after lobs.</p></div>
+          </div>
+          <div class="hero-actions"><button class="secondary-button" data-route="progress">View progress</button></div>
+        </div>
+
+        <div class="stat-grid">
+          <article class="stat-card"><span class="stat-icon green">◉</span><div><small>MATCHES ANALYSED</small><strong id="matchesCount">6</strong><p>2 this month</p></div></article>
+          <article class="stat-card"><span class="stat-icon violet">⌁</span><div><small>SHOTS TRACKED</small><strong id="shotsCount">1,248</strong><p>Across 10 shot types</p></div></article>
+          <article class="stat-card"><span class="stat-icon orange">↯</span><div><small>AVG. REACTION</small><strong>0.68s</strong><p class="positive">↓ 0.05s improving</p></div></article>
+          <article class="stat-card"><span class="stat-icon blue">◇</span><div><small>COURT COVERAGE</small><strong>74%</strong><p class="positive">↑ 6% vs last match</p></div></article>
+        </div>
+
+        <div class="two-column">
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">LATEST MATCH</p><h2>Performance by shot</h2></div><button class="text-button" data-route="matches">Full report →</button></div>
+            <div class="shot-list" id="shotList"></div>
+          </article>
+          <article class="panel court-panel">
+            <div class="panel-head"><div><p class="eyebrow">COURT POSITION</p><h2>Where you influenced play</h2></div><select id="heatmapFilter" aria-label="Heatmap period"><option value="all">Full match</option><option value="attack">Attacking</option><option value="defence">Defending</option></select></div>
+            <div class="court-wrap">
+              <canvas id="courtHeatmap" width="560" height="680" aria-label="Court coverage heatmap"></canvas>
+              <div class="heat-legend"><span>Lower activity</span><i></i><span>Higher activity</span></div>
+            </div>
+            <div class="court-insight"><span>✦</span><p><strong>Coverage insight</strong>You controlled the left channel well, but left space behind you during net transitions.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="upload" class="page" aria-labelledby="uploadTitle">
+        <div class="page-head compact"><div><p class="eyebrow">NEW ANALYSIS</p><h1 id="uploadTitle" data-i18n="uploadMatch">Upload your match</h1><p>Use fixed, full-court footage for the most accurate result.</p></div></div>
+        <div class="stepper" aria-label="Upload progress"><div class="step active" data-step="1"><span>1</span>Video</div><i></i><div class="step" data-step="2"><span>2</span>Select player</div><i></i><div class="step" data-step="3"><span>3</span>Analyse</div></div>
+        <div id="uploadStep" class="workflow-card">
+          <label class="drop-zone" id="dropZone" for="videoInput">
+            <input id="videoInput" type="file" accept="video/*" hidden>
+            <span class="upload-symbol">↑</span><h2>Drop your match video here</h2><p>or click to choose a file</p><small>MP4, MOV or WebM · Up to 5 GB · 1080p recommended</small>
+          </label>
+          <div class="upload-tips"><strong>For the best analysis</strong><span>✓ Keep the full court visible</span><span>✓ Use a fixed camera behind the baseline</span><span>✓ Avoid cuts and zooming</span></div>
+        </div>
+        <div id="playerStep" class="workflow-card hidden">
+          <div class="workflow-head"><div><p class="eyebrow">IDENTIFY YOURSELF</p><h2>Which player are you?</h2><p>Select your position on the court. You can correct tracking later.</p></div><span id="selectedFile" class="file-pill"></span></div>
+          <div class="player-court" aria-label="Select your starting court position">
+            <div class="court-net"></div>
+            <button class="player-marker" style="--x:26%;--y:24%" data-player="1"><span>1</span></button>
+            <button class="player-marker" style="--x:70%;--y:28%" data-player="2"><span>2</span></button>
+            <button class="player-marker" style="--x:28%;--y:72%" data-player="3"><span>3</span></button>
+            <button class="player-marker" style="--x:72%;--y:76%" data-player="4"><span>4</span></button>
+          </div>
+          <button id="startAnalysis" class="primary-button wide" disabled>Start analysis</button>
+        </div>
+        <div id="analysisStep" class="workflow-card analysis-state hidden">
+          <div class="analysis-orbit"><span>AI</span></div><p class="eyebrow">ANALYSIS IN PROGRESS</p><h2 id="analysisHeading">Preparing your footage…</h2><p id="analysisDescription">Your video stays on this device in this prototype.</p>
+          <div class="progress-track"><span id="analysisProgress"></span></div><strong id="analysisPercent">0%</strong>
+        </div>
+        <div id="completeStep" class="workflow-card analysis-state hidden">
+          <div class="complete-icon">✓</div><p class="eyebrow">MATCH READY</p><h2>Your report is ready</h2><p>We found 214 shots and generated your movement and court-position analysis.</p><button id="viewReport" class="primary-button">View match report</button>
+        </div>
+      </section>
+
+      <section id="matches" class="page" aria-labelledby="matchesTitle">
+        <div class="page-head"><div><p class="eyebrow">MATCH LIBRARY</p><h1 id="matchesTitle" data-i18n="myMatches">Your matches</h1><p>Review your previous performances and key moments.</p></div><button class="primary-button" data-route="upload">＋ <span data-i18n="analyseMatch">Analyse match</span></button></div>
+        <div class="match-list" id="matchList"></div>
+      </section>
+
+      <section id="progress" class="page" aria-labelledby="progressTitle">
+        <div class="page-head"><div><p class="eyebrow">LONG-TERM DEVELOPMENT</p><h1 id="progressTitle" data-i18n="progress">Your progress</h1><p>How your game has changed across recent matches.</p></div></div>
+        <article class="panel"><div class="panel-head"><div><p class="eyebrow">OVERALL SCORE</p><h2>Six-match trend</h2></div><span class="positive-pill">+11 points</span></div><div id="trendChart" class="trend-chart" role="img" aria-label="Overall score increased from 67 to 78 over six matches"></div></article>
+        <div class="three-column"><article class="panel"><p class="eyebrow">BIGGEST GAIN</p><h2>Volley</h2><strong class="large-number">+14</strong><p>Better consistency and earlier contact at the net.</p></article><article class="panel"><p class="eyebrow">MOST CONSISTENT</p><h2>Lob</h2><strong class="large-number">86%</strong><p>Successful across your last four matches.</p></article><article class="panel"><p class="eyebrow">NEXT FOCUS</p><h2>Chiquita</h2><strong class="large-number">62</strong><p>Reduce net errors when playing from deep.</p></article></div>
+      </section>
+
+      <section id="profile" class="page" aria-labelledby="profileTitle">
+        <div class="page-head compact"><div><p class="eyebrow">ACCOUNT</p><h1 id="profileTitle" data-i18n="profile">Player profile</h1><p>Personalise your analysis and playing goals.</p></div></div>
+        <form id="profileForm" class="profile-form panel">
+          <div class="profile-avatar" id="profileAvatar">AS</div>
+          <label>Full name<input id="profileName" type="text" value="Alex Smith" required></label>
+          <label><span data-i18n="emailAddress">Email address</span><input id="profileEmail" type="email" required readonly></label>
+          <label>Playing side<select id="playingSide"><option>Left</option><option>Right</option><option>Both</option></select></label>
+          <label>Level<select id="playerLevel"><option>Beginner</option><option>Intermediate</option><option selected>Competitive</option><option>Advanced</option></select></label>
+          <label>Primary goal<select><option>Improve overall game</option><option>Reduce unforced errors</option><option>Improve net play</option><option>Improve defence</option></select></label>
+          <button class="primary-button" type="submit">Save profile</button><span id="profileSaved" class="save-message" aria-live="polite"></span>
+        </form>
+      </section>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+</body>
+</html>
