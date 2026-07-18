@@ -31,7 +31,7 @@ $('#menuButton').addEventListener('click', () => {
   $('#menuButton').setAttribute('aria-expanded', String(open));
 });
 
-function getAllMatches(){const saved=JSON.parse(localStorage.getItem('padeliqMatches')||'[]'),matches=saved.filter(match=>!isLegacyDemoMatch(match));if(matches.length!==saved.length)localStorage.setItem('padeliqMatches',JSON.stringify(matches));return matches;}
+function getAllMatches(){const saved=JSON.parse(localStorage.getItem('padeliqMatches')||'[]'),filtered=saved.filter(match=>!isLegacyDemoMatch(match)),matches=filtered.map(match=>match.result?match:{...match,score:null});if(JSON.stringify(matches)!==JSON.stringify(saved))localStorage.setItem('padeliqMatches',JSON.stringify(matches));return matches;}
 
 function renderMatches(){
   const matches=getAllMatches();
