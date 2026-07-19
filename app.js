@@ -132,16 +132,18 @@ function renderScoreTracker(){const matches=getAllMatches(),record=matches.map(m
 $$('[data-trend-window]').forEach(button=>button.addEventListener('click',()=>{localStorage.setItem('padeliqTrendWindow',button.dataset.trendWindow);renderScoreTracker();}));
 
 function referencePercentile(score){return Math.max(3,Math.min(97,Math.round(100/(1+Math.exp(-(Number(score)-70)/7)))));}
+function ageBenchmarkBand(age){const value=Number(age);if(!Number.isFinite(value)||value<13||value>100)return null;if(value<20)return 'Under 20';if(value<35)return '20–35';if(value<45)return '35–45';return '45+';}
+function ordinal(value){const number=Math.round(Number(value)),lastTwo=number%100;if(lastTwo>=11&&lastTwo<=13)return `${number}th`;return `${number}${number%10===1?'st':number%10===2?'nd':number%10===3?'rd':'th'}`;}
 function latestMeasuredMatch(){return getAllMatches().find(match=>match.result?.summary)||null;}
 function renderBenchmarks(){
-  const profile=JSON.parse(localStorage.getItem('padeliqProfile')||'{}'),matches=getAllMatches(),measured=latestMeasuredMatch(),venues=[...new Set(matches.map(m=>m.place).filter(Boolean))],profileParts=[];
-  if(profile.age)profileParts.push(`Age ${escapeHtml(profile.age)}`);if(profile.gender)profileParts.push(escapeHtml(profile.gender));if(profile.area)profileParts.push(escapeHtml(profile.area));if(profile.homeClub)profileParts.push(escapeHtml(profile.homeClub));venues.filter(place=>place!==profile.homeClub).slice(0,2).forEach(place=>profileParts.push(escapeHtml(place)));
-  $('#cohortChips').innerHTML=profileParts.length?profileParts.map(item=>`<span>${item}</span>`).join(''):'<span class="missing-chip">Complete age, gender and area in Profile</span>';
-  $('#cohortTitle').textContent=profileParts.length>=3?`${profileParts.length} matching attributes selected`:'Add profile details to build your cohort';
+  const profile=JSON.parse(localStorage.getItem('padeliqProfile')||'{}'),matches=getAllMatches(),measured=latestMeasuredMatch(),profileParts=[],ageBand=ageBenchmarkBand(profile.age),validGenders=['Woman','Man','Non-binary','Self-describe'],validLevels=['Beginner','Intermediate','Competitive','Advanced'];
+  if(ageBand)profileParts.push(`Age: ${ageBand}`);if(validGenders.includes(profile.gender))profileParts.push(`Gender: ${profile.gender}`);if(validLevels.includes(profile.level))profileParts.push(`Level: ${profile.level}`);
+  $('#cohortChips').innerHTML=profileParts.length?profileParts.map(item=>`<span>${escapeHtml(item)}</span>`).join(''):'<span class="missing-chip">Complete age, gender and level in Profile</span>';
+  $('#cohortTitle').textContent=profileParts.length===3?'3 profile attributes selected':'Add age, gender and level to build your cohort';
   $('#cohortStatus').textContent='Cohort building';
   ['positionPercentile','coveragePercentile','recoveryPercentile'].forEach(id=>{$('#'+id).textContent='—';$('#'+id+'Bar').style.width='0%';});
   const scores=matches.map(m=>Number(m.score)).filter(Number.isFinite),score=scores[0];
-  if(Number.isFinite(score)){const percentile=referencePercentile(score);$('#referencePercentile').textContent=`${percentile}th`;$('#referenceHeadline').textContent=percentile>=75?'Strong positioning reference':percentile>=50?'Developing above the reference midpoint':'Clear positioning upside';$('#referenceInsight').textContent=`Your latest position score of ${score} is shown against the fixed early-stage reference distribution.`;}else{$('#referencePercentile').textContent='—';$('#referenceHeadline').textContent='Complete an analysed match';$('#referenceInsight').textContent='Your positioning score will create an initial reference estimate.';}
+  if(Number.isFinite(score)){const percentile=referencePercentile(score);$('#referencePercentile').textContent=`${ordinal(percentile)} percentile`;$('#referenceHeadline').textContent=percentile>=75?'Strong positioning reference':percentile>=50?'Developing above the reference midpoint':'Clear positioning upside';$('#referenceInsight').textContent=`Your latest position score of ${score} is shown against the fixed early-stage reference distribution.`;}else{$('#referencePercentile').textContent='—';$('#referenceHeadline').textContent='Complete an analysed match';$('#referenceInsight').textContent='Your positioning score will create an initial reference estimate.';}
   if(measured){const summary=measured.result.summary;$('#coveragePercentileText').textContent=`Latest measured tracking coverage: ${summary.tracking_coverage_percent}%`;$('#recoveryPercentileText').textContent=summary.recovery_within_two_seconds_percent==null?'Recovery baseline is still being established':`Recovery within two seconds: ${summary.recovery_within_two_seconds_percent}%`;}
   renderMistakes(measured);
 }
