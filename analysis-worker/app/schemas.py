@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -55,10 +57,17 @@ class AIFeedback(BaseModel):
     disclaimer: str = "AI coaching is an estimate from sampled video frames and tracking data; review important decisions with a qualified coach."
 
 
+class PositionPoint(BaseModel):
+    t: float
+    x: float
+    y: float
+    source: Literal["detected", "interpolated"] = "detected"
+
+
 class AnalysisResult(BaseModel):
     version: str = "0.4"
     summary: AnalysisSummary
-    positions: list[dict[str, float]]
+    positions: list[PositionPoint]
     heatmap: list[list[float]]
     warnings: list[str]
     ai_feedback: AIFeedback | None = None

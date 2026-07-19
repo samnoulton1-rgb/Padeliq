@@ -101,7 +101,7 @@ def health() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "service": "padeliq-analysis",
-        "version": "0.4.0",
+        "version": "0.4.1",
         "tracking_model": os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
         "video_llm": os.getenv("VLM_MODEL_ID", "Qwen/Qwen3-VL-2B-Instruct"),
         "video_llm_enabled": os.getenv("ENABLE_VIDEO_LLM", "true").lower() == "true",
