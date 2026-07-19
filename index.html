@@ -136,6 +136,17 @@
           </div>
           <div class="zone-overlay-key"><span><i class="zone-net"></i>Net-pressure zone</span><span><i class="zone-back"></i>Back-court zone</span><span><i class="zone-base"></i>Your estimated base</span></div>
         </article>
+        <article id="rallyOutcomePanel" class="panel rally-outcome-panel" hidden>
+          <div class="panel-head"><div><p class="eyebrow">AUTOMATED POINT OUTCOMES</p><h2>Where points were likely won and lost</h2><p>The model checks visible rally endings and player reactions. Low-confidence calls are excluded from your win/loss figures.</p></div><span id="outcomeConfidence" class="positive-pill">AI estimate</span></div>
+          <div class="outcome-summary">
+            <div><small>CONFIDENTLY CLASSIFIED</small><strong id="classifiedRallies">—</strong><span id="classifiedContext">Awaiting outcome analysis</span></div>
+            <div class="outcome-won"><small>LIKELY WON</small><strong id="wonRallies">—</strong><span id="wonContext">—</span></div>
+            <div class="outcome-lost"><small>LIKELY LOST</small><strong id="lostRallies">—</strong><span id="lostContext">—</span></div>
+          </div>
+          <div id="outcomeInsight" class="outcome-insight"></div>
+          <div id="rallyOutcomeList" class="rally-outcome-list"></div>
+          <small class="feedback-disclaimer">These are automated estimates, not an official score. Green and red markers on the court show the selected player’s position at likely point endings.</small>
+        </article>
         <article id="aiFeedbackPanel" class="panel ai-feedback-panel" hidden>
           <div class="panel-head"><div><p class="eyebrow">AI VIDEO COACH</p><h2>What the footage suggests</h2></div><span id="aiConfidence" class="positive-pill"></span></div>
           <p id="aiSummary"></p>

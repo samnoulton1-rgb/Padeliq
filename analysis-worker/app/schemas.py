@@ -64,10 +64,24 @@ class PositionPoint(BaseModel):
     source: Literal["detected", "interpolated"] = "detected"
 
 
+class RallyOutcome(BaseModel):
+    id: str
+    start_seconds: float
+    end_seconds: float
+    outcome: Literal["won", "lost", "unknown"]
+    confidence: float = Field(ge=0, le=1)
+    x: float | None = None
+    y: float | None = None
+    zone: Literal["net", "transition", "back", "unknown"] = "unknown"
+    reason: str
+    model: str
+
+
 class AnalysisResult(BaseModel):
     version: str = "0.4"
     summary: AnalysisSummary
     positions: list[PositionPoint]
+    rallies: list[RallyOutcome] = []
     heatmap: list[list[float]]
     warnings: list[str]
     ai_feedback: AIFeedback | None = None
@@ -81,4 +95,13 @@ class JobState(BaseModel):
     progress: int = 0
     message: str = "Queued"
     result: AnalysisResult | None = None
+    error: str | None = None
+
+
+class OutcomeJobState(BaseModel):
+    token: str
+    status: str
+    progress: int = 0
+    message: str = "Queued"
+    rallies: list[RallyOutcome] = []
     error: str | None = None

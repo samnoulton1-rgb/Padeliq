@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .analyzer import PadelAnalyzer
-from .schemas import CourtCalibration, JobState
+from .schemas import CourtCalibration, JobState, OutcomeJobState, PositionPoint
 from .video_feedback import VideoFeedbackAnalyzer
 
 app = FastAPI(title="PadelIQ Analysis Worker", version="0.1.0")
@@ -27,7 +27,9 @@ app.add_middleware(
 )
 
 jobs: dict[str, JobState] = {}
+outcome_jobs: dict[str, OutcomeJobState] = {}
 jobs_lock = threading.Lock()
+model_lock = threading.Lock()
 analyzer: PadelAnalyzer | None = None
 feedback_analyzer: VideoFeedbackAnalyzer | None = None
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(500 * 1024 * 1024)))
@@ -57,7 +59,8 @@ def run_job(job_id: str, video_path: Path, calibration: CourtCalibration, retain
         update_job(job_id, status="processing", progress=2, message="Loading analysis model")
         if analyzer is None:
             analyzer = PadelAnalyzer(os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"))
-        diagnostic_path = video_path.parent / "tracking-diagnostic.mp4" if retain_diagnostic else None
+        # The marked overlay is also the input for selected-player rally review.
+        diagnostic_path = video_path.parent / "tracking-diagnostic.mp4"
         result = analyzer.analyze(
             video_path,
             calibration,
@@ -69,7 +72,9 @@ def run_job(job_id: str, video_path: Path, calibration: CourtCalibration, retain
                 update_job(job_id, progress=98, message="Creating AI coaching feedback")
                 if feedback_analyzer is None:
                     feedback_analyzer = VideoFeedbackAnalyzer()
-                result.ai_feedback = feedback_analyzer.analyze(video_path, result.summary)
+                with model_lock:
+                    result.rallies = feedback_analyzer.analyze_rallies(diagnostic_path, result.positions)
+                    result.ai_feedback = feedback_analyzer.analyze(video_path, result.summary)
             except Exception as exc:
                 result.warnings.append(f"AI coaching feedback was unavailable: {exc}")
         elif result.summary.quality_status != "reliable":
@@ -96,16 +101,79 @@ def run_job(job_id: str, video_path: Path, calibration: CourtCalibration, retain
             shutil.rmtree(video_path.parent, ignore_errors=True)
 
 
+def run_outcome_job(token: str, video_path: Path, positions: list[PositionPoint]) -> None:
+    global feedback_analyzer
+    try:
+        outcome_jobs[token] = outcome_jobs[token].model_copy(
+            update={"status": "processing", "progress": 10, "message": "Finding likely rally endings"}
+        )
+        if feedback_analyzer is None:
+            feedback_analyzer = VideoFeedbackAnalyzer()
+        with model_lock:
+            rallies = feedback_analyzer.analyze_rallies(video_path, positions)
+        outcome_jobs[token] = outcome_jobs[token].model_copy(
+            update={"status": "complete", "progress": 100, "message": "Outcome estimates ready", "rallies": rallies}
+        )
+    except Exception as exc:
+        outcome_jobs[token] = outcome_jobs[token].model_copy(
+            update={"status": "failed", "message": "Outcome analysis failed", "error": str(exc)}
+        )
+    finally:
+        shutil.rmtree(video_path.parent, ignore_errors=True)
+
+
 @app.get("/health")
 def health() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "service": "padeliq-analysis",
-        "version": "0.4.1",
+        "version": "0.5.0",
         "tracking_model": os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
         "video_llm": os.getenv("VLM_MODEL_ID", "Qwen/Qwen3-VL-2B-Instruct"),
         "video_llm_enabled": os.getenv("ENABLE_VIDEO_LLM", "true").lower() == "true",
     }
+
+
+@app.post("/outcome-jobs", response_model=OutcomeJobState, status_code=202)
+async def create_outcome_job(
+    background_tasks: BackgroundTasks,
+    video: UploadFile = File(...),
+    positions: str = Form(...),
+    token: str | None = Form(None),
+) -> OutcomeJobState:
+    if video.content_type and not video.content_type.startswith("video/"):
+        raise HTTPException(415, "A video file is required")
+    try:
+        parsed_positions = [PositionPoint.model_validate(item) for item in json.loads(positions)]
+    except Exception as exc:
+        raise HTTPException(422, f"Invalid tracked positions: {exc}") from exc
+    if not parsed_positions:
+        raise HTTPException(422, "Tracked positions are required")
+    outcome_token = token or uuid.uuid4().hex
+    existing = outcome_jobs.get(outcome_token)
+    if existing and existing.status in {"queued", "processing", "complete"}:
+        return existing
+    directory = Path(tempfile.mkdtemp(prefix="padeliq-outcomes-"))
+    video_path = directory / "marked-player.mp4"
+    uploaded_bytes = 0
+    with video_path.open("wb") as target:
+        while chunk := await video.read(1024 * 1024):
+            uploaded_bytes += len(chunk)
+            if uploaded_bytes > MAX_UPLOAD_BYTES:
+                shutil.rmtree(directory, ignore_errors=True)
+                raise HTTPException(413, "The uploaded video is too large")
+            target.write(chunk)
+    state = OutcomeJobState(token=outcome_token, status="queued")
+    outcome_jobs[outcome_token] = state
+    background_tasks.add_task(run_outcome_job, outcome_token, video_path, parsed_positions)
+    return state
+
+
+@app.get("/outcomes/{token}", response_model=OutcomeJobState)
+def get_outcomes(token: str) -> OutcomeJobState:
+    if token not in outcome_jobs:
+        raise HTTPException(404, "Outcome analysis not found")
+    return outcome_jobs[token]
 
 
 @app.post("/jobs", response_model=JobState, status_code=202)

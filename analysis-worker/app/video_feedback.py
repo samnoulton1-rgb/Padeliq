@@ -6,9 +6,10 @@ import re
 from pathlib import Path
 
 import cv2
+import numpy as np
 from PIL import Image
 
-from .schemas import AIFeedback, AnalysisSummary
+from .schemas import AIFeedback, AnalysisSummary, PositionPoint, RallyOutcome
 
 
 class VideoFeedbackAnalyzer:
@@ -57,6 +58,127 @@ class VideoFeedbackAnalyzer:
         if not match:
             raise ValueError("The video model did not return structured feedback")
         return json.loads(match.group(0))
+
+    @staticmethod
+    def _rally_windows(video_path: Path) -> list[tuple[float, float]]:
+        capture = cv2.VideoCapture(str(video_path))
+        fps = capture.get(cv2.CAP_PROP_FPS) or 8.0
+        total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = total / fps if total else 0
+        sample_every = max(1, round(fps / 4))
+        previous = None
+        samples: list[tuple[float, float]] = []
+        frame_index = 0
+        while True:
+            ok, frame = capture.read()
+            if not ok:
+                break
+            if frame_index % sample_every:
+                frame_index += 1
+                continue
+            gray = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (192, 108))
+            score = 0.0 if previous is None else float(np.mean(cv2.absdiff(gray, previous)))
+            samples.append((frame_index / fps, score))
+            previous = gray
+            frame_index += 1
+        capture.release()
+        if len(samples) < 12:
+            return [(0.0, duration)] if duration >= 3 else []
+        scores = np.asarray([score for _, score in samples], dtype=float)
+        smoothed = np.convolve(scores, np.ones(5) / 5, mode="same")
+        threshold = max(2.0, float(np.percentile(smoothed, 52)))
+        active = smoothed >= threshold
+        windows: list[tuple[float, float]] = []
+        start: float | None = None
+        quiet = 0
+        for (timestamp, _), is_active in zip(samples, active):
+            if is_active and start is None:
+                start = max(0.0, timestamp - 0.75)
+            if start is None:
+                continue
+            quiet = 0 if is_active else quiet + 1
+            if quiet >= 6:
+                end = timestamp - quiet / 4 + 0.75
+                if end - start >= 3:
+                    windows.append((start, min(duration, end)))
+                start, quiet = None, 0
+        if start is not None and duration - start >= 3:
+            windows.append((start, duration))
+        merged: list[tuple[float, float]] = []
+        for window in windows:
+            if merged and window[0] - merged[-1][1] < 1.5:
+                merged[-1] = (merged[-1][0], window[1])
+            else:
+                merged.append(window)
+        return merged[:40]
+
+    @staticmethod
+    def _window_frames(video_path: Path, start: float, end: float, count: int = 5) -> list[Image.Image]:
+        capture = cv2.VideoCapture(str(video_path))
+        images: list[Image.Image] = []
+        window_start = max(start, end - 4.5)
+        for timestamp in np.linspace(window_start, end, count):
+            capture.set(cv2.CAP_PROP_POS_MSEC, float(timestamp) * 1000)
+            ok, frame = capture.read()
+            if not ok:
+                continue
+            height, width = frame.shape[:2]
+            scale = min(1.0, 640 / max(height, width))
+            if scale < 1:
+                frame = cv2.resize(frame, (round(width * scale), round(height * scale)))
+            images.append(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+        capture.release()
+        return images
+
+    def analyze_rallies(self, marked_video_path: Path, positions: list[PositionPoint]) -> list[RallyOutcome]:
+        self._load()
+        windows = self._rally_windows(marked_video_path)
+        outcomes: list[RallyOutcome] = []
+        for batch_start in range(0, len(windows), 4):
+            batch = windows[batch_start : batch_start + 4]
+            content: list[dict] = []
+            for local_index, (start, end) in enumerate(batch):
+                rally_index = batch_start + local_index + 1
+                content.append({"type": "text", "text": f"Candidate rally {rally_index}, ending near {end:.1f} seconds. The selected player is enclosed by the GREEN tracking box."})
+                content.extend({"type": "image", "image": image} for image in self._window_frames(marked_video_path, start, end))
+            prompt = f"""You are reviewing the final seconds of {len(batch)} candidate padel rallies.
+The selected player is marked by a GREEN tracking box. For each candidate, decide whether it visibly ends a rally
+and, only when the evidence is reasonably clear, whether the selected player's team WON or LOST the point.
+Use the ball outcome, final player contact, all four players' reactions and preparation for the next point.
+Never infer an outcome merely from where the selected player stands. If the ball or reactions do not make the
+outcome clear, return unknown. Confidence must reflect visible evidence, not guesswork.
+
+Return ONLY JSON with this exact shape:
+{{"rallies":[{{"index":{batch_start + 1},"is_rally_end":true,"outcome":"won|lost|unknown","confidence":0.0,"reason":"brief visible evidence"}}]}}
+Return one item for every candidate index from {batch_start + 1} to {batch_start + len(batch)}."""
+            content.append({"type": "text", "text": prompt})
+            inputs = self.processor.apply_chat_template(
+                [{"role": "user", "content": content}], tokenize=True, add_generation_prompt=True,
+                return_dict=True, return_tensors="pt"
+            ).to(self.model.device)
+            generated = self.model.generate(**inputs, max_new_tokens=450, do_sample=False)
+            new_tokens = generated[0][inputs["input_ids"].shape[1] :]
+            data = self._json(self.processor.decode(new_tokens, skip_special_tokens=True))
+            by_index = {int(item.get("index", -1)): item for item in data.get("rallies", [])}
+            for local_index, (start, end) in enumerate(batch):
+                rally_index = batch_start + local_index + 1
+                item = by_index.get(rally_index, {})
+                raw_outcome = str(item.get("outcome", "unknown")).lower()
+                confidence = max(0.0, min(1.0, float(item.get("confidence", 0))))
+                outcome = raw_outcome if raw_outcome in {"won", "lost"} and item.get("is_rally_end") and confidence >= 0.72 else "unknown"
+                nearest = min(positions, key=lambda point: abs(point.t - end)) if positions else None
+                zone = "unknown"
+                if nearest is not None:
+                    zone = "net" if 8 <= nearest.y <= 12 else "back" if nearest.y <= 6 or nearest.y >= 14 else "transition"
+                outcomes.append(
+                    RallyOutcome(
+                        id=f"rally-{rally_index}", start_seconds=round(start, 2), end_seconds=round(end, 2),
+                        outcome=outcome, confidence=round(confidence, 3), x=nearest.x if nearest else None,
+                        y=nearest.y if nearest else None, zone=zone,
+                        reason=str(item.get("reason", "Insufficient visible evidence"))[:240], model=self.model_id,
+                    )
+                )
+        return outcomes
 
     def analyze(self, video_path: Path, summary: AnalysisSummary) -> AIFeedback:
         self._load()
