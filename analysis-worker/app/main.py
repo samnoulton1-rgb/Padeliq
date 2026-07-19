@@ -67,17 +67,10 @@ def run_job(job_id: str, video_path: Path, calibration: CourtCalibration, retain
             lambda progress, message: update_job(job_id, progress=progress, message=message),
             diagnostic_path=diagnostic_path,
         )
-        if result.summary.quality_status == "reliable" and os.getenv("ENABLE_VIDEO_LLM", "true").lower() == "true":
-            try:
-                update_job(job_id, progress=98, message="Creating AI coaching feedback")
-                if feedback_analyzer is None:
-                    feedback_analyzer = VideoFeedbackAnalyzer()
-                with model_lock:
-                    result.rallies = feedback_analyzer.analyze_rallies(diagnostic_path, result.positions)
-                    result.ai_feedback = feedback_analyzer.analyze(video_path, result.summary)
-            except Exception as exc:
-                result.warnings.append(f"AI coaching feedback was unavailable: {exc}")
-        elif result.summary.quality_status != "reliable":
+        # Complete the measured positioning report immediately. Video-LLM rally
+        # review is launched separately by the client for retained videos, so a
+        # slow model load or generation can never hold the core report at 98%.
+        if result.summary.quality_status != "reliable":
             result.warnings.append("AI coaching was skipped because the tracking quality gate was not met.")
         if retain_diagnostic:
             token = uuid.uuid4().hex
@@ -127,7 +120,7 @@ def health() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "service": "padeliq-analysis",
-        "version": "0.6.0",
+        "version": "0.6.1",
         "tracking_model": os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
         "video_llm": os.getenv("VLM_MODEL_ID", "Qwen/Qwen3-VL-2B-Instruct"),
         "video_llm_enabled": os.getenv("ENABLE_VIDEO_LLM", "true").lower() == "true",
