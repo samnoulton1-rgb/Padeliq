@@ -149,18 +149,19 @@
           </div>
           <label class="drop-zone" id="dropZone" for="videoInput">
             <input id="videoInput" type="file" accept="video/*" hidden>
-            <span class="upload-symbol">↑</span><h2>Drop your match video here</h2><p>or click to choose a file</p><small>MP4, MOV or WebM · Up to 5 GB · 1080p recommended</small>
+            <span class="upload-symbol">↑</span><h2>Drop your match video here</h2><p>or click to choose a file</p><small>MP4, MOV or WebM · Up to 500 MB · 1080p recommended</small>
           </label>
           <div class="upload-tips"><strong>For the best analysis</strong><span>✓ Keep the full court visible</span><span>✓ Use a fixed camera behind the baseline</span><span>✓ Avoid cuts and zooming</span></div>
         </div>
         <div id="playerStep" class="workflow-card hidden">
-          <div class="workflow-head"><div><p class="eyebrow">IDENTIFY YOURSELF</p><h2>Which player are you?</h2><p>Select your position on the court. You can correct tracking later.</p></div><span id="selectedFile" class="file-pill"></span></div>
-          <div class="calibration-instructions"><strong id="calibrationPrompt">Click the top-left court corner</strong><span id="calibrationCount">0 of 5 points selected</span></div>
+          <div class="workflow-head"><div><p class="eyebrow">IDENTIFY YOURSELF</p><h2>Mark the court and yourself</h2><p>Mark four court corners, then identify yourself at up to three moments to improve tracking after crossings or occlusion.</p></div><span id="selectedFile" class="file-pill"></span></div>
+          <div class="calibration-instructions"><strong id="calibrationPrompt">Click the top-left court corner</strong><span id="calibrationCount">0 court corners · 0 player references</span></div>
           <div class="calibration-stage" id="calibrationStage">
             <video id="calibrationVideo" controls muted playsinline aria-label="Uploaded match calibration frame"></video>
             <canvas id="calibrationCanvas" aria-label="Court and player selection overlay"></canvas>
           </div>
-          <div class="workflow-actions"><button id="removeVideo" class="danger-button" type="button">Remove video</button><button id="clearCalibration" class="secondary-button" type="button">Clear points</button></div>
+          <div class="workflow-actions"><button id="removeVideo" class="danger-button" type="button">Remove video</button><button id="clearCalibration" class="secondary-button" type="button">Clear points</button><button id="finishReferences" class="secondary-button hidden" type="button">Use selected references</button></div>
+          <label class="diagnostic-consent"><input id="retainDiagnostic" type="checkbox"><span><strong>Retain a diagnostic copy for 24 hours</strong><small>Optional. Keeps the source and a tracking-overlay copy temporarily so tracking losses can be investigated. A private, unguessable link is created and expires automatically.</small></span></label>
           <button id="startAnalysis" class="primary-button wide" disabled>Start analysis</button>
         </div>
         <div id="analysisStep" class="workflow-card analysis-state hidden">
@@ -168,7 +169,7 @@
           <div class="progress-track"><span id="analysisProgress"></span></div><strong id="analysisPercent">0%</strong>
         </div>
         <div id="completeStep" class="workflow-card analysis-state hidden">
-          <div class="complete-icon">✓</div><p class="eyebrow">MATCH READY</p><h2>Your report is ready</h2><p>Your selected-player movement, court positions and coverage heatmap are ready.</p><button id="viewReport" class="primary-button">View match report</button>
+          <div class="complete-icon">✓</div><p class="eyebrow">MATCH READY</p><h2>Your report is ready</h2><p id="completeSummary">Your selected-player movement, court positions and coverage heatmap are ready.</p><div id="diagnosticDownloads" class="diagnostic-downloads hidden"></div><button id="viewReport" class="primary-button">View match report</button>
         </div>
       </section>
 

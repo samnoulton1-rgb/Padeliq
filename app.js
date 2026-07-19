@@ -6,6 +6,7 @@ const legacyDemoSignatures=new Set([
 function isLegacyDemoMatch(match){const signature=[match.isoDate,match.title,match.place,match.court,match.racket,match.matchScore].map(value=>value||'').join('|');return /^demo-|^edited-demo-/.test(String(match.id||''))||legacyDemoSignatures.has(signature);}
 let currentFile = null;
 let calibrationPoints=[];
+let playerReferences=[];
 let liveAnalysisResult=null;
 let currentMatchMeta=null;
 let currentUser=null;
@@ -208,9 +209,9 @@ function setWorkflow(step){
 
 $('#startAnalysis').addEventListener('click',()=>{setWorkflow(3);runAnalysis();});
 
-const calibrationLabels=['top-left court corner','top-right court corner','bottom-right court corner','bottom-left court corner','the player you want to analyse'];
+const calibrationLabels=['top-left court corner','top-right court corner','bottom-right court corner','bottom-left court corner'];
 function prepareCalibration(file){
-  calibrationPoints=[];const video=$('#calibrationVideo');
+  calibrationPoints=[];playerReferences=[];const video=$('#calibrationVideo');
   if(video.dataset.objectUrl)URL.revokeObjectURL(video.dataset.objectUrl);
   const objectUrl=URL.createObjectURL(file);video.dataset.objectUrl=objectUrl;video.src=objectUrl;video.currentTime=0;updateCalibration();
 }
@@ -221,15 +222,24 @@ function resizeCalibrationCanvas(){
 function drawCalibration(){
   const canvas=$('#calibrationCanvas'),ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
   if(calibrationPoints.length>1){ctx.strokeStyle='#65c8ff';ctx.lineWidth=Math.max(3,canvas.width/300);ctx.beginPath();calibrationPoints.slice(0,4).forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));if(calibrationPoints.length>=4)ctx.closePath();ctx.stroke();}
-  calibrationPoints.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(7,canvas.width/110),0,Math.PI*2);ctx.fillStyle=i===4?'#ffcf5c':'#42b5ef';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();ctx.fillStyle='#102a43';ctx.font=`700 ${Math.max(12,canvas.width/70)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(i+1),p.x,p.y);});
+  calibrationPoints.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(7,canvas.width/110),0,Math.PI*2);ctx.fillStyle='#42b5ef';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();ctx.fillStyle='#102a43';ctx.font=`700 ${Math.max(12,canvas.width/70)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(i+1),p.x,p.y);});
+  const video=$('#calibrationVideo');playerReferences.filter(p=>Math.abs(p.t-video.currentTime)<.75).forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(9,canvas.width/95),0,Math.PI*2);ctx.fillStyle='#ffcf5c';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();ctx.fillStyle='#102a43';ctx.font=`700 ${Math.max(12,canvas.width/75)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(`P${i+1}`,p.x,p.y);});
 }
 function updateCalibration(){
-  const count=calibrationPoints.length;$('#calibrationCount').textContent=`${count} of 5 points selected`;$('#calibrationPrompt').textContent=count<5?`Click ${calibrationLabels[count]}`:'Calibration ready';$('#startAnalysis').disabled=count<5;drawCalibration();
+  const corners=calibrationPoints.length,references=playerReferences.length;$('#calibrationCount').textContent=`${corners} court corners · ${references} player reference${references===1?'':'s'}`;
+  if(corners<4)$('#calibrationPrompt').textContent=`Click the ${calibrationLabels[corners]}`;
+  else if(!references)$('#calibrationPrompt').textContent='Pause on a clear frame and click the player you want to analyse';
+  else if(references<3)$('#calibrationPrompt').textContent=`Reference ${references} saved. Pause on another clear moment and click yourself again, or continue with ${references}.`;
+  else $('#calibrationPrompt').textContent='Court and player references ready';
+  $('#startAnalysis').disabled=corners<4||references<1;$('#finishReferences').classList.toggle('hidden',references<1||references>=3);drawCalibration();
 }
 $('#calibrationVideo').addEventListener('loadedmetadata',resizeCalibrationCanvas);
 $('#calibrationVideo').addEventListener('loadeddata',resizeCalibrationCanvas);
-$('#calibrationCanvas').addEventListener('click',event=>{if(calibrationPoints.length>=5)return;const canvas=$('#calibrationCanvas'),rect=canvas.getBoundingClientRect();calibrationPoints.push({x:(event.clientX-rect.left)*canvas.width/rect.width,y:(event.clientY-rect.top)*canvas.height/rect.height});updateCalibration();});
-$('#clearCalibration').addEventListener('click',()=>{calibrationPoints=[];updateCalibration();});
+$('#calibrationVideo').addEventListener('seeked',drawCalibration);
+$('#calibrationVideo').addEventListener('timeupdate',drawCalibration);
+$('#calibrationCanvas').addEventListener('click',event=>{const canvas=$('#calibrationCanvas'),rect=canvas.getBoundingClientRect(),point={x:(event.clientX-rect.left)*canvas.width/rect.width,y:(event.clientY-rect.top)*canvas.height/rect.height};if(calibrationPoints.length<4)calibrationPoints.push(point);else if(playerReferences.length<3){playerReferences.push({...point,t:$('#calibrationVideo').currentTime});const video=$('#calibrationVideo');if(playerReferences.length===1&&video.duration>10)video.currentTime=video.duration*.4;else if(playerReferences.length===2&&video.duration>10)video.currentTime=video.duration*.75;}updateCalibration();});
+$('#finishReferences').addEventListener('click',()=>{$('#calibrationPrompt').textContent='Court and player references ready';$('#finishReferences').classList.add('hidden');});
+$('#clearCalibration').addEventListener('click',()=>{calibrationPoints=[];playerReferences=[];$('#calibrationVideo').currentTime=0;updateCalibration();});
 $('#removeVideo').addEventListener('click',()=>{if(currentFile&&!window.confirm('Remove this selected video and cancel its analysis?'))return;resetUpload();showToast('Selected video removed');});
 
 function runAnalysis(){
@@ -246,8 +256,8 @@ function runAnalysis(){
 async function runRealAnalysis(){
   try{
     $('#analysisHeading').textContent='Uploading match securely…';$('#analysisDescription').textContent='Preparing the video-analysis job.';
-    const calibration={corners:calibrationPoints.slice(0,4),player:calibrationPoints[4]};
-    const form=new FormData();form.append('video',currentFile);form.append('calibration',JSON.stringify(calibration));
+    const calibration={corners:calibrationPoints.slice(0,4),player_references:playerReferences};
+    const form=new FormData();form.append('video',currentFile);form.append('calibration',JSON.stringify(calibration));form.append('retain_diagnostic',$('#retainDiagnostic').checked?'true':'false');
     const response=await fetch(`${analysisApi.replace(/\/$/,'')}/jobs`,{method:'POST',body:form});if(!response.ok)throw new Error(await response.text());
     const job=await response.json();await pollAnalysisJob(job.id);
   }catch(error){$('#analysisHeading').textContent='Analysis could not start';$('#analysisDescription').textContent=error.message;$('#analysisProgress').style.width='0';}
@@ -257,13 +267,16 @@ async function pollAnalysisJob(jobId){
   while(true){
     const response=await fetch(`${base}/jobs/${jobId}`);if(!response.ok)throw new Error(await response.text());const job=await response.json();
     $('#analysisProgress').style.width=`${job.progress}%`;$('#analysisPercent').textContent=`${job.progress}%`;$('#analysisHeading').textContent=job.message;
-    if(job.status==='complete'){applyRealResult(job.result);saveAnalysedMatch();setWorkflow(4);return;}
+    if(job.status==='complete'){applyRealResult(job.result);saveAnalysedMatch();setWorkflow(4);renderDiagnosticDownloads(job.result);return;}
     if(job.status==='failed')throw new Error(job.error||'Video analysis failed');await new Promise(resolve=>setTimeout(resolve,2500));
   }
 }
 function applyRealResult(result){
-  liveAnalysisResult=result;const summary=result.summary;const positionScore=Math.round(summary.tracking_coverage_percent*.45+(summary.recovery_within_two_seconds_percent||60)*.3+Math.min(100,summary.net_zone_percent*2)*.25);$('#overallScore').textContent=positionScore;$('#distanceStat').textContent=`${Math.round(summary.distance_metres)}m`;$('#distanceContext').textContent=`Average ${summary.average_speed_kmh} km/h · max ${summary.maximum_speed_kmh} km/h`;$('#coverageStat').textContent=`${summary.tracking_coverage_percent}%`;$('#coverageContext').textContent=`${summary.tracked_frames} of ${summary.analysed_frames} sampled frames`;$('#netPresenceStat').textContent=`${summary.net_zone_percent}%`;$('#recoveryStat').textContent=summary.recovery_within_two_seconds_percent==null?'—':`${summary.recovery_within_two_seconds_percent}%`;$('#backCourtStat').textContent=`${summary.back_court_percent}%`;renderAiFeedback(result.ai_feedback||buildLongitudinalInsight(summary));drawHeatmap();
+  liveAnalysisResult=result;const summary=result.summary,reliable=summary.quality_status?summary.quality_status==='reliable':summary.tracking_coverage_percent>=70;const positionScore=reliable?Math.round(summary.tracking_coverage_percent*.45+(summary.recovery_within_two_seconds_percent||60)*.3+Math.min(100,summary.net_zone_percent*2)*.25):null;$('#overallScore').textContent=positionScore??'—';$('.score-ring').style.setProperty('--score',positionScore||0);$('#coverageStat').textContent=`${summary.tracking_coverage_percent}%`;$('#coverageContext').textContent=`${summary.direct_tracking_coverage_percent??summary.tracking_coverage_percent}% direct · ${summary.interpolated_frames||0} short-gap estimates · ${summary.identity_reacquisitions||0} reacquisitions`;
+  if(reliable){$('#distanceStat').textContent=`${Math.round(summary.distance_metres)}m`;$('#distanceContext').textContent=`Average ${summary.average_speed_kmh} km/h · max ${summary.maximum_speed_kmh} km/h`;$('#netPresenceStat').textContent=`${summary.net_zone_percent}%`;$('#recoveryStat').textContent=summary.recovery_within_two_seconds_percent==null?'—':`${summary.recovery_within_two_seconds_percent}%`;$('#backCourtStat').textContent=`${summary.back_court_percent}%`;renderAiFeedback(result.ai_feedback||buildLongitudinalInsight(summary));}
+  else{$('#distanceStat').textContent='—';$('#distanceContext').textContent='Withheld: tracking quality below the reliable threshold';$('#netPresenceStat').textContent='—';$('#recoveryStat').textContent='—';$('#backCourtStat').textContent='—';renderAiFeedback({summary:'This analysis did not meet the minimum tracking-quality threshold. Performance scores and movement metrics have been withheld.',strengths:[],improvements:['Add two or three clear player references and check all four court corners','Use the optional diagnostic overlay to identify where tracking was lost'],confidence:'low',disclaimer:'Coverage must reach 70% with at least 55% direct detections before performance metrics are reported.'});}$('#completeSummary').textContent=reliable?'Your selected-player movement, court positions and coverage heatmap passed the tracking-quality gate.':'Tracking quality was below the reliable threshold, so performance scores were withheld. Use the diagnostic overlay before retrying.';drawHeatmap();
 }
+function renderDiagnosticDownloads(result){const container=$('#diagnosticDownloads');if(!result?.diagnostic_token){container.classList.add('hidden');container.innerHTML='';return;}const base=analysisApi.replace(/\/$/,'');const token=encodeURIComponent(result.diagnostic_token),expires=result.diagnostic_available_until?new Date(result.diagnostic_available_until).toLocaleString():'';container.innerHTML=`<p><strong>24-hour diagnostic copy available</strong>${expires?` · expires ${escapeHtml(expires)}`:''}</p><a class="secondary-button" href="${base}/diagnostics/${token}/overlay" target="_blank" rel="noopener">Download tracking overlay</a><a class="secondary-button" href="${base}/diagnostics/${token}/video" target="_blank" rel="noopener">Download retained source</a>`;container.classList.remove('hidden');}
 function buildLongitudinalInsight(summary){const history=getAllMatches().filter(m=>m.result?.summary).slice(0,4),previous=history[0]?.result?.summary,coverageChange=previous?summary.tracking_coverage_percent-previous.tracking_coverage_percent:0;return {summary:previous?`Your tracking coverage is ${Math.abs(coverageChange).toFixed(1)} points ${coverageChange>=0?'higher':'lower'} than your previous analysed match. Your court-zone balance and recovery pattern are the priority signals for this report.`:'This is your first positioning baseline. Future reports will compare court-zone balance, recovery and movement efficiency against it.',strengths:[`Tracked reliably for ${summary.tracking_coverage_percent}% of sampled frames`,`Covered ${summary.net_zone_percent}% of tracked time in the net zone`],improvements:[summary.recovery_within_two_seconds_percent==null?'Build a consistent recovery position after each movement':`Aim to improve the ${summary.recovery_within_two_seconds_percent}% recovery-within-two-seconds rate`,'Use the heatmap to reduce low-coverage gaps'],confidence:'measured',disclaimer:'Generated from measured player tracking and match history. Full Qwen video interpretation activates when the model service is running.'};}
 function renderAiFeedback(feedback){
   const panel=$('#aiFeedbackPanel');if(!feedback){panel.hidden=true;return;}panel.hidden=false;
@@ -278,14 +291,14 @@ function saveAnalysedMatch(){
   const selectedDate=currentMatchMeta?.date?new Date(`${currentMatchMeta.date}T12:00:00`):new Date(), months=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const custom=JSON.parse(localStorage.getItem('padeliqMatches')||'[]');
   const summary=liveAnalysisResult?.summary;
-  const positionScore=summary?Math.round(summary.tracking_coverage_percent*.45+(summary.recovery_within_two_seconds_percent||60)*.3+Math.min(100,summary.net_zone_percent*2)*.25):null;
+  const reliable=summary&&(summary.quality_status?summary.quality_status==='reliable':summary.tracking_coverage_percent>=70);const positionScore=reliable?Math.round(summary.tracking_coverage_percent*.45+(summary.recovery_within_two_seconds_percent||60)*.3+Math.min(100,summary.net_zone_percent*2)*.25):null;
   custom.unshift({id:crypto.randomUUID?.()||String(Date.now()),date:String(selectedDate.getDate()).padStart(2,'0'),month:months[selectedDate.getMonth()],isoDate:currentMatchMeta?.date,title:currentMatchMeta?.name||currentFile?.name||'Uploaded match',place:currentMatchMeta?.place||'',court:currentMatchMeta?.court||'',racket:currentMatchMeta?.racket||'',matchScore:currentMatchMeta?.matchScore||'',detail:summary?`${Math.round(summary.duration_seconds/60)}m · ${Math.round(summary.distance_metres)}m travelled · Positioning report`:'Awaiting verified video analysis',score:positionScore,result:liveAnalysisResult||null,videoFilename:currentFile?.name||'',videoMimeType:currentFile?.type||'',videoSizeBytes:currentFile?.size||null});
   localStorage.setItem('padeliqMatches',JSON.stringify(custom));renderMatches();
   queueMatchSave(custom[0]);
 }
 
 $('#viewReport').addEventListener('click',()=>{routeTo('dashboard');showToast('Your latest match has been added');resetUpload();});
-function resetUpload(){const video=$('#calibrationVideo');if(video.dataset.objectUrl)URL.revokeObjectURL(video.dataset.objectUrl);video.removeAttribute('src');video.load();currentFile=null;currentMatchMeta=null;liveAnalysisResult=null;videoInput.value='';calibrationPoints=[];$('#startAnalysis').disabled=true;$('#analysisProgress').style.width='0';$('#analysisPercent').textContent='0%';setWorkflow(1);}
+function resetUpload(){const video=$('#calibrationVideo');if(video.dataset.objectUrl)URL.revokeObjectURL(video.dataset.objectUrl);video.removeAttribute('src');video.load();currentFile=null;currentMatchMeta=null;liveAnalysisResult=null;videoInput.value='';calibrationPoints=[];playerReferences=[];$('#retainDiagnostic').checked=false;$('#diagnosticDownloads').classList.add('hidden');$('#startAnalysis').disabled=true;$('#analysisProgress').style.width='0';$('#analysisPercent').textContent='0%';setWorkflow(1);}
 
 function initials(name){return name.trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()).join('')||'P';}
 function loadProfile(){

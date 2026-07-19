@@ -6,11 +6,23 @@ class Point(BaseModel):
     y: float
 
 
+class PlayerReference(Point):
+    t: float = Field(default=0, ge=0)
+
+
 class CourtCalibration(BaseModel):
     """Image points ordered: top-left, top-right, bottom-right, bottom-left."""
 
     corners: list[Point] = Field(min_length=4, max_length=4)
-    player: Point
+    player: Point | None = None
+    player_references: list[PlayerReference] = Field(default_factory=list, max_length=5)
+
+    def references(self) -> list[PlayerReference]:
+        if self.player_references:
+            return sorted(self.player_references, key=lambda point: point.t)
+        if self.player is not None:
+            return [PlayerReference(x=self.player.x, y=self.player.y, t=0)]
+        raise ValueError("At least one player reference is required")
 
 
 class AnalysisSummary(BaseModel):
@@ -18,6 +30,10 @@ class AnalysisSummary(BaseModel):
     analysed_frames: int
     tracked_frames: int
     tracking_coverage_percent: float
+    direct_tracking_coverage_percent: float = 0
+    interpolated_frames: int = 0
+    identity_reacquisitions: int = 0
+    quality_status: str = "unreliable"
     distance_metres: float
     average_speed_kmh: float
     maximum_speed_kmh: float
@@ -40,12 +56,14 @@ class AIFeedback(BaseModel):
 
 
 class AnalysisResult(BaseModel):
-    version: str = "0.2"
+    version: str = "0.4"
     summary: AnalysisSummary
     positions: list[dict[str, float]]
     heatmap: list[list[float]]
     warnings: list[str]
     ai_feedback: AIFeedback | None = None
+    diagnostic_available_until: str | None = None
+    diagnostic_token: str | None = None
 
 
 class JobState(BaseModel):

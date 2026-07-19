@@ -10,7 +10,9 @@ pinned: false
 
 # PadelIQ analysis worker
 
-An initial commercially friendly video-analysis service for court calibration, selected-player tracking, court positions, movement heatmaps, distance and recovery-position proxies. An optional Qwen3-VL layer turns sampled frames and measured metrics into cautious coaching feedback.
+An initial commercially friendly video-analysis service for court calibration, selected-player tracking, court positions, movement heatmaps, distance and recovery-position proxies. The tracker supports multiple time-stamped player references, appearance-and-motion identity reacquisition, court-side constraints, short-gap interpolation and a reliability gate. An optional Qwen3-VL layer turns sampled frames and measured metrics into cautious coaching feedback only after the tracking-quality gate passes.
+
+Users may explicitly opt in to 24-hour diagnostic retention. When enabled, the worker keeps the source video and a tracking-overlay copy behind an unguessable temporary token. Expired files are removed automatically; the default remains immediate deletion after analysis. Space storage is ephemeral, so diagnostics are best-effort and may disappear earlier if the worker restarts.
 
 ## Open-source components
 
