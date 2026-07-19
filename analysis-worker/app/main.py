@@ -94,7 +94,7 @@ def run_job(job_id: str, video_path: Path, calibration: CourtCalibration, retain
             shutil.rmtree(video_path.parent, ignore_errors=True)
 
 
-def run_outcome_job(token: str, video_path: Path, positions: list[PositionPoint]) -> None:
+def run_outcome_job(token: str, video_path: Path, positions: list[PositionPoint], cleanup_directory: bool = True) -> None:
     global feedback_analyzer
     try:
         outcome_jobs[token] = outcome_jobs[token].model_copy(
@@ -112,7 +112,8 @@ def run_outcome_job(token: str, video_path: Path, positions: list[PositionPoint]
             update={"status": "failed", "message": "Outcome analysis failed", "error": str(exc)}
         )
     finally:
-        shutil.rmtree(video_path.parent, ignore_errors=True)
+        if cleanup_directory:
+            shutil.rmtree(video_path.parent, ignore_errors=True)
 
 
 @app.get("/health")
@@ -120,7 +121,7 @@ def health() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "service": "padeliq-analysis",
-        "version": "0.6.2",
+        "version": "0.6.3",
         "tracking_model": os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
         "video_llm": os.getenv("VLM_MODEL_ID", "Qwen/Qwen3-VL-2B-Instruct"),
         "video_llm_enabled": os.getenv("ENABLE_VIDEO_LLM", "true").lower() == "true",
@@ -159,6 +160,31 @@ async def create_outcome_job(
     state = OutcomeJobState(token=outcome_token, status="queued")
     outcome_jobs[outcome_token] = state
     background_tasks.add_task(run_outcome_job, outcome_token, video_path, parsed_positions)
+    return state
+
+
+@app.post("/outcomes/{token}", response_model=OutcomeJobState, status_code=202)
+async def create_retained_outcome_job(
+    token: str,
+    background_tasks: BackgroundTasks,
+    positions: str = Form(...),
+) -> OutcomeJobState:
+    cleanup_expired_diagnostics()
+    item = diagnostics.get(token)
+    if item is None:
+        raise HTTPException(404, "Retained video not found or expired")
+    try:
+        parsed_positions = [PositionPoint.model_validate(point) for point in json.loads(positions)]
+    except Exception as exc:
+        raise HTTPException(422, f"Invalid tracked positions: {exc}") from exc
+    if not parsed_positions:
+        raise HTTPException(422, "Tracked positions are required")
+    existing = outcome_jobs.get(token)
+    if existing and existing.status in {"queued", "processing", "complete"}:
+        return existing
+    state = OutcomeJobState(token=token, status="queued", message="Queued for point-outcome review")
+    outcome_jobs[token] = state
+    background_tasks.add_task(run_outcome_job, token, Path(item["video"]), parsed_positions, False)
     return state
 
 
