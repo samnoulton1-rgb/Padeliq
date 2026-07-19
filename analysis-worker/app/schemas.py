@@ -105,7 +105,7 @@ class PairAnalysis(BaseModel):
 
 
 class AnalysisResult(BaseModel):
-    version: str = "0.6"
+    version: str = "0.6.2"
     summary: AnalysisSummary
     positions: list[PositionPoint]
     rallies: list[RallyOutcome] = []

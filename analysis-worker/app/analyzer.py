@@ -168,8 +168,11 @@ class PadelAnalyzer:
                 score += distance / max(1.5, min(7.0, MAX_PLAUSIBLE_SPEED_MPS * elapsed)) * 2.5
             if reference is not None:
                 score += math.hypot(feet[0] - reference.x, feet[1] - reference.y) / max(1, diagonal) * 12
+            # A padel pair cannot cross the net during play. Treat the marked
+            # team half as a hard identity constraint so an opponent can never
+            # be substituted for either selected player.
             if preferred_half is not None and (0 if court[1] < 10 else 1) != preferred_half:
-                score += 2.5
+                continue
             if current_id is not None and int(tracker_id) == current_id:
                 score -= 1.2
             confidence = float(detections.confidence[index]) if detections.confidence is not None else 0.5
@@ -278,6 +281,10 @@ class PadelAnalyzer:
         partner_references = sorted(calibration.partner_references, key=lambda point: point.t)
         initial_court = self._to_court(matrix, (references[0].x, references[0].y))
         preferred_half = 0 if initial_court[1] < 10 else 1
+        if any((0 if self._to_court(matrix, (item.x, item.y))[1] < 10 else 1) != preferred_half for item in references):
+            raise ValueError("Your player reference markers must all be on the same side of the net")
+        if partner_references and any((0 if self._to_court(matrix, (item.x, item.y))[1] < 10 else 1) != preferred_half for item in partner_references):
+            raise ValueError("Your partner markers must be on the same side of the net as your player markers")
         tracker = sv.ByteTrack(frame_rate=max(1, round(fps / sample_every)), lost_track_buffer=60)
         selected_id: int | None = None
         partner_id: int | None = None
@@ -303,9 +310,6 @@ class PadelAnalyzer:
             analysed += 1
             timestamp = frame_index / fps
             reference = self._near_reference(references, timestamp)
-            side_reference = min(references, key=lambda item: abs(item.t - timestamp))
-            side_court = self._to_court(matrix, (side_reference.x, side_reference.y))
-            current_preferred_half = 0 if side_court[1] < 10 else 1
             previous_id = selected_id
             index, candidate_id, court, candidate_appearance = self._choose_target(
                 frame,
@@ -315,7 +319,7 @@ class PadelAnalyzer:
                 positions[-1] if positions else None,
                 target_appearance,
                 reference,
-                current_preferred_half,
+                preferred_half,
                 timestamp,
                 {partner_id} if partner_id is not None else None,
             )
@@ -340,14 +344,11 @@ class PadelAnalyzer:
             partner_index = None
             if partner_references:
                 partner_reference = self._near_reference(partner_references, timestamp)
-                partner_side_reference = min(partner_references, key=lambda item: abs(item.t - timestamp))
-                partner_side_court = self._to_court(matrix, (partner_side_reference.x, partner_side_reference.y))
-                partner_preferred_half = 0 if partner_side_court[1] < 10 else 1
                 previous_partner_id = partner_id
                 partner_index, partner_candidate_id, partner_court, partner_candidate_appearance = self._choose_target(
                     frame, detections, matrix, partner_id,
                     partner_positions[-1] if partner_positions else None,
-                    partner_appearance, partner_reference, partner_preferred_half, timestamp,
+                    partner_appearance, partner_reference, preferred_half, timestamp,
                     {selected_id} if selected_id is not None else None,
                 )
                 if partner_index is not None and partner_court is not None:
