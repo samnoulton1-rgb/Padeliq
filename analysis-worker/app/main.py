@@ -28,6 +28,8 @@ jobs: dict[str, JobState] = {}
 jobs_lock = threading.Lock()
 analyzer: PadelAnalyzer | None = None
 feedback_analyzer: VideoFeedbackAnalyzer | None = None
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(500 * 1024 * 1024)))
+MAX_ACTIVE_JOBS = int(os.getenv("MAX_ACTIVE_JOBS", "2"))
 
 
 def update_job(job_id: str, **values) -> None:
@@ -63,8 +65,15 @@ def run_job(job_id: str, video_path: Path, calibration: CourtCalibration) -> Non
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "padeliq-analysis", "version": "0.2.0"}
+def health() -> dict[str, str | bool]:
+    return {
+        "status": "ok",
+        "service": "padeliq-analysis",
+        "version": "0.3.0",
+        "tracking_model": os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
+        "video_llm": os.getenv("VLM_MODEL_ID", "Qwen/Qwen3-VL-2B-Instruct"),
+        "video_llm_enabled": os.getenv("ENABLE_VIDEO_LLM", "true").lower() == "true",
+    }
 
 
 @app.post("/jobs", response_model=JobState, status_code=202)
@@ -75,6 +84,10 @@ async def create_job(
 ) -> JobState:
     if video.content_type and not video.content_type.startswith("video/"):
         raise HTTPException(415, "A video file is required")
+    with jobs_lock:
+        active_jobs = sum(job.status in {"queued", "processing"} for job in jobs.values())
+    if active_jobs >= MAX_ACTIVE_JOBS:
+        raise HTTPException(429, "The analysis service is busy. Please try again shortly.")
     try:
         parsed_calibration = CourtCalibration.model_validate(json.loads(calibration))
     except Exception as exc:
@@ -83,8 +96,13 @@ async def create_job(
     directory = Path(tempfile.mkdtemp(prefix="padeliq-"))
     suffix = Path(video.filename or "match.mp4").suffix or ".mp4"
     video_path = directory / f"match{suffix}"
+    uploaded_bytes = 0
     with video_path.open("wb") as target:
         while chunk := await video.read(1024 * 1024):
+            uploaded_bytes += len(chunk)
+            if uploaded_bytes > MAX_UPLOAD_BYTES:
+                shutil.rmtree(directory, ignore_errors=True)
+                raise HTTPException(413, "The uploaded video is too large")
             target.write(chunk)
     state = JobState(id=job_id, status="queued")
     jobs[job_id] = state

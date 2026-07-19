@@ -66,7 +66,7 @@ const clubDirectoryRows=[
   {name:'Padel District Waltham Abbey',region:'Essex',area:'Waltham Abbey',courts:'See venue',setting:'See venue',website:'https://playtomic.com/clubs/padel-district-waltham-abbey'}
 ];
 const pendingMatchSaves=new Map();
-const analysisApi=window.PADELIQ_ANALYSIS_API||localStorage.getItem('padeliqAnalysisApi')||'';
+const analysisApi=window.PADELIQ_ANALYSIS_API||localStorage.getItem('padeliqAnalysisApi')||'https://samnoul-padeliq.hf.space';
 
 function routeTo(route){
   $$('.page').forEach(page => page.classList.toggle('active', page.id === route));
