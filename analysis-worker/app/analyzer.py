@@ -11,7 +11,7 @@ import torch
 from scipy.ndimage import gaussian_filter
 from transformers import RTDetrForObjectDetection, RTDetrImageProcessor
 
-from .schemas import AnalysisResult, AnalysisSummary, CourtCalibration, PlayerReference
+from .schemas import AnalysisResult, AnalysisSummary, CourtCalibration, PairAnalysis, PairEvent, PlayerReference
 
 COURT_WIDTH_METRES = 10.0
 COURT_LENGTH_METRES = 20.0
@@ -147,12 +147,15 @@ class PadelAnalyzer:
         reference: PlayerReference | None,
         preferred_half: int | None,
         timestamp: float,
+        excluded_tracker_ids: set[int] | None = None,
     ) -> tuple[int | None, int | None, tuple[float, float] | None, np.ndarray | None]:
         if detections.tracker_id is None:
             return None, None, None, appearance
         diagonal = math.hypot(frame.shape[1], frame.shape[0])
         best: tuple[float, int, int, tuple[float, float], np.ndarray | None] | None = None
         for index, (box, tracker_id) in enumerate(zip(detections.xyxy, detections.tracker_id)):
+            if excluded_tracker_ids and int(tracker_id) in excluded_tracker_ids:
+                continue
             feet = self._feet(box)
             court = self._to_court(matrix, feet)
             if not (-0.75 <= court[0] <= 10.75 and -0.75 <= court[1] <= 20.75):
@@ -179,6 +182,81 @@ class PadelAnalyzer:
         _, index, tracker_id, court, candidate_appearance = best
         return index, tracker_id, court, candidate_appearance
 
+    @staticmethod
+    def _pair_analysis(
+        positions: list[dict[str, float]],
+        partner_positions: list[dict[str, float]],
+        analysed: int,
+        partner_direct_tracked: int,
+        self_quality: str,
+    ) -> PairAnalysis:
+        me_by_sample = {int(point["sample"]): point for point in positions}
+        partner_by_sample = {int(point["sample"]): point for point in partner_positions}
+        joined = [(me_by_sample[key], partner_by_sample[key]) for key in sorted(me_by_sample.keys() & partner_by_sample.keys())]
+        pair_coverage = len(joined) / max(1, analysed) * 100
+        partner_direct_coverage = partner_direct_tracked / max(1, analysed) * 100
+        reliable = self_quality == "reliable" and pair_coverage >= 60 and partner_direct_coverage >= 50
+
+        def depth(point: dict[str, float]) -> float:
+            return point["y"] if point["y"] <= 10 else 20 - point["y"]
+
+        aligned = healthy = middle_protected = 0
+        gaps: list[float] = []
+        events: list[PairEvent] = []
+        last_event_at = -10.0
+        for me, partner in joined:
+            me_depth, partner_depth = depth(me), depth(partner)
+            depth_gap = abs(me_depth - partner_depth)
+            left_x, right_x = sorted((me["x"], partner["x"]))
+            middle_gap = right_x - left_x
+            pair_gap = math.hypot(me["x"] - partner["x"], me_depth - partner_depth)
+            gaps.append(pair_gap)
+            aligned += depth_gap <= 2.5
+            healthy += 2.0 <= pair_gap <= 6.0
+            middle_protected += middle_gap <= 5.0
+            candidates = [
+                (depth_gap, "depth_split", "Different court depths left one player isolated", depth_gap),
+                (middle_gap, "middle_gap", "A large central gap opened between the pair", middle_gap),
+                (left_x, "left_space", "Potential open space appeared in the left channel", left_x),
+                (10 - right_x, "right_space", "Potential open space appeared in the right channel", 10 - right_x),
+            ]
+            severity, event_type, label, gap = max(candidates, key=lambda item: item[0])
+            threshold = 4.0 if event_type == "depth_split" else 4.5
+            if severity >= threshold and me["t"] - last_event_at >= 3.0:
+                events.append(PairEvent(t=round(me["t"], 2), type=event_type, label=label, gap_metres=round(gap, 1), me_x=round(me["x"], 2), me_y=round(me["y"], 2), partner_x=round(partner["x"], 2), partner_y=round(partner["y"], 2)))
+                last_event_at = me["t"]
+
+        coordinated = opportunities = 0
+        for (previous_me, previous_partner), (me, partner) in zip(joined, joined[1:]):
+            me_change = depth(me) - depth(previous_me)
+            partner_change = depth(partner) - depth(previous_partner)
+            if max(abs(me_change), abs(partner_change)) < 0.35:
+                continue
+            opportunities += 1
+            coordinated += abs(me_change) >= 0.15 and abs(partner_change) >= 0.15 and me_change * partner_change > 0
+        transition_percent = coordinated / opportunities * 100 if opportunities else None
+        count = max(1, len(joined))
+        alignment_percent = aligned / count * 100
+        spacing_percent = healthy / count * 100
+        middle_percent = middle_protected / count * 100
+        transition_for_score = transition_percent if transition_percent is not None else 60.0
+        score = round(alignment_percent * .30 + spacing_percent * .25 + transition_for_score * .20 + middle_percent * .25) if reliable else None
+        public_partner = [{key: value for key, value in point.items() if key != "sample"} for point in partner_positions[::4]]
+        return PairAnalysis(
+            quality_status="reliable" if reliable else "unreliable",
+            pair_tracking_coverage_percent=round(pair_coverage, 1),
+            partner_direct_tracking_coverage_percent=round(partner_direct_coverage, 1),
+            partner_positions=public_partner,
+            alignment_percent=round(alignment_percent, 1),
+            healthy_spacing_percent=round(spacing_percent, 1),
+            coordinated_transition_percent=round(transition_percent, 1) if transition_percent is not None else None,
+            middle_protection_percent=round(middle_percent, 1),
+            average_partner_gap_metres=round(float(np.mean(gaps)), 1) if gaps else 0,
+            largest_partner_gap_metres=round(max(gaps), 1) if gaps else 0,
+            pair_movement_score=score,
+            open_space_events=events[:16],
+        )
+
     def analyze(
         self,
         video_path: Path,
@@ -197,14 +275,18 @@ class PadelAnalyzer:
         expected_samples = max(1, total_frames // sample_every)
         matrix = self._homography(calibration)
         references = calibration.references()
+        partner_references = sorted(calibration.partner_references, key=lambda point: point.t)
         initial_court = self._to_court(matrix, (references[0].x, references[0].y))
         preferred_half = 0 if initial_court[1] < 10 else 1
         tracker = sv.ByteTrack(frame_rate=max(1, round(fps / sample_every)), lost_track_buffer=60)
         selected_id: int | None = None
+        partner_id: int | None = None
         target_appearance: np.ndarray | None = None
+        partner_appearance: np.ndarray | None = None
         positions: list[dict[str, float]] = []
-        analysed = direct_tracked = frame_index = sample_index = 0
-        missing_samples = reacquisitions = 0
+        partner_positions: list[dict[str, float]] = []
+        analysed = direct_tracked = partner_direct_tracked = frame_index = sample_index = 0
+        missing_samples = partner_missing_samples = reacquisitions = partner_reacquisitions = 0
         writer: cv2.VideoWriter | None = None
 
         while True:
@@ -235,6 +317,7 @@ class PadelAnalyzer:
                 reference,
                 current_preferred_half,
                 timestamp,
+                {partner_id} if partner_id is not None else None,
             )
             if index is not None and court is not None:
                 if previous_id is not None and candidate_id != previous_id and missing_samples:
@@ -254,19 +337,49 @@ class PadelAnalyzer:
                 if missing_samples > round(sample_rate * 1.5):
                     selected_id = None
 
+            partner_index = None
+            if partner_references:
+                partner_reference = self._near_reference(partner_references, timestamp)
+                partner_side_reference = min(partner_references, key=lambda item: abs(item.t - timestamp))
+                partner_side_court = self._to_court(matrix, (partner_side_reference.x, partner_side_reference.y))
+                partner_preferred_half = 0 if partner_side_court[1] < 10 else 1
+                previous_partner_id = partner_id
+                partner_index, partner_candidate_id, partner_court, partner_candidate_appearance = self._choose_target(
+                    frame, detections, matrix, partner_id,
+                    partner_positions[-1] if partner_positions else None,
+                    partner_appearance, partner_reference, partner_preferred_half, timestamp,
+                    {selected_id} if selected_id is not None else None,
+                )
+                if partner_index is not None and partner_court is not None:
+                    if previous_partner_id is not None and partner_candidate_id != previous_partner_id and partner_missing_samples:
+                        partner_reacquisitions += 1
+                    partner_id = partner_candidate_id
+                    partner_missing_samples = 0
+                    if partner_appearance is None:
+                        partner_appearance = partner_candidate_appearance
+                    elif partner_candidate_appearance is not None:
+                        partner_appearance = partner_appearance * .88 + partner_candidate_appearance * .12
+                    partner_positions.append({"t": timestamp, "x": partner_court[0], "y": partner_court[1], "sample": sample_index, "source": "detected"})
+                    partner_direct_tracked += 1
+                else:
+                    partner_missing_samples += 1
+                    if partner_missing_samples > round(sample_rate * 1.5):
+                        partner_id = None
+
             if writer is not None:
                 for detection_index, box in enumerate(detections.xyxy):
                     track_id = int(detections.tracker_id[detection_index]) if detections.tracker_id is not None else -1
-                    colour = (62, 211, 89) if index == detection_index else (120, 160, 185)
+                    colour = (62, 211, 89) if index == detection_index else (220, 120, 70) if partner_index == detection_index else (120, 160, 185)
                     x1, y1, x2, y2 = box.astype(int)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), colour, 3 if index == detection_index else 1)
-                    cv2.putText(frame, f"ID {track_id}", (x1, max(20, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, colour, 2)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), colour, 3 if detection_index in {index, partner_index} else 1)
+                    identity = "ME" if index == detection_index else "PARTNER" if partner_index == detection_index else f"ID {track_id}"
+                    cv2.putText(frame, identity, (x1, max(20, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, colour, 2)
                 polygon = np.asarray([[[round(point.x), round(point.y)] for point in calibration.corners]], dtype=np.int32)
                 cv2.polylines(frame, polygon, True, (255, 200, 60), 2)
                 cv2.putText(frame, f"Tracked {direct_tracked}/{analysed}", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
                 writer.write(frame)
             if analysed % 10 == 0:
-                progress(min(94, 5 + round(analysed / expected_samples * 89)), "Tracking and re-identifying selected player")
+                progress(min(94, 5 + round(analysed / expected_samples * 89)), "Tracking selected player and partner" if partner_references else "Tracking and re-identifying selected player")
             frame_index += 1
             sample_index += 1
         capture.release()
@@ -276,6 +389,9 @@ class PadelAnalyzer:
         if len(positions) < 2:
             raise ValueError("The selected player could not be tracked reliably")
         positions, interpolated = self._interpolate(positions, sample_rate)
+        partner_interpolated = 0
+        if partner_positions:
+            partner_positions, partner_interpolated = self._interpolate(partner_positions, sample_rate)
         usable_coverage = min(100.0, len(positions) / max(1, analysed) * 100)
         direct_coverage = direct_tracked / max(1, analysed) * 100
         quality_status = "reliable" if usable_coverage >= MIN_RELIABLE_COVERAGE and direct_coverage >= 55 else "unreliable"
@@ -307,6 +423,12 @@ class PadelAnalyzer:
         ]
         if quality_status == "unreliable":
             warnings.append("Quality gate failed; performance scores are withheld until usable coverage reaches 70% with at least 55% direct detections.")
+        pair_analysis = None
+        if partner_references and partner_positions:
+            pair_analysis = self._pair_analysis(positions, partner_positions, analysed, partner_direct_tracked, quality_status)
+            warnings.append(f"Partner tracking used {partner_direct_tracked} direct detections and {partner_interpolated} short-gap estimates.")
+            if pair_analysis.quality_status == "unreliable":
+                warnings.append("Pair scores are withheld because both-player tracking did not meet the pair reliability gate.")
         summary = AnalysisSummary(
             duration_seconds=round(duration, 2),
             analysed_frames=analysed,
@@ -328,4 +450,4 @@ class PadelAnalyzer:
         )
         progress(98, "Creating report")
         public_positions = [{key: value for key, value in point.items() if key != "sample"} for point in positions[::4]]
-        return AnalysisResult(summary=summary, positions=public_positions, heatmap=heatmap.round(4).tolist(), warnings=warnings)
+        return AnalysisResult(summary=summary, positions=public_positions, pair_analysis=pair_analysis, heatmap=heatmap.round(4).tolist(), warnings=warnings)

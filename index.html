@@ -94,7 +94,7 @@
       <section id="dashboard" class="page active" aria-labelledby="dashboardTitle">
         <div class="page-head">
           <div><p class="eyebrow">PLAYER OVERVIEW</p><h1 id="dashboardTitle"><span id="timeGreeting">Good morning</span>, <span id="welcomeName">Player</span></h1><p>Here’s how your game is developing.</p></div>
-          <button class="primary-button" data-route="upload">＋ <span data-i18n="analyseMatch">Analyse match</span></button>
+          <div class="analysis-head-actions"><label class="analysis-view-switch"><span>MATCH ANALYSIS VIEW</span><select id="analysisViewMode"><option value="single">Single player</option><option value="partner" disabled>Partner &amp; Me</option></select></label><button class="primary-button" data-route="upload">＋ <span data-i18n="analyseMatch">Analyse match</span></button></div>
         </div>
 
         <div class="score-hero">
@@ -153,6 +153,20 @@
           <div class="feedback-columns"><div><h3>What you did well</h3><ul id="aiStrengths"></ul></div><div><h3>Work on next</h3><ul id="aiImprovements"></ul></div></div>
           <small id="aiDisclaimer" class="feedback-disclaimer"></small>
         </article>
+        <div id="partnerAnalysisView" class="partner-analysis-view" hidden>
+          <div class="pair-score-hero"><div class="pair-score"><strong id="pairMovementScore">—</strong><span>PAIR MOVEMENT</span></div><div><span id="pairQualityPill" class="positive-pill">Awaiting pair analysis</span><h2>How well you move as a pair</h2><p>See whether you hold a connected line, protect the middle and transition together.</p></div></div>
+          <div class="pair-stat-grid">
+            <article><small>PARTNER-LINE ALIGNMENT</small><strong id="pairAlignment">—</strong><p>Time spent at compatible court depths.</p></article>
+            <article><small>HEALTHY SPACING</small><strong id="pairSpacing">—</strong><p>Time with a useful, recoverable gap.</p></article>
+            <article><small>COORDINATED TRANSITIONS</small><strong id="pairTransitions">—</strong><p>Forward and backward movements made together.</p></article>
+            <article><small>MIDDLE PROTECTION</small><strong id="pairMiddle">—</strong><p>Time without a large central opening.</p></article>
+          </div>
+          <div class="pair-report-grid">
+            <article class="panel pair-court-panel"><div class="panel-head"><div><p class="eyebrow">PAIR POSITION MAP</p><h2>Connected movement and exposed space</h2></div><span class="pair-legend"><i></i>You <i></i>Partner <i></i>Open space</span></div><canvas id="pairCourtCanvas" width="600" height="600" aria-label="Player and partner movement map"></canvas><p class="pair-court-note">Open-space highlights are positioning signals, not confirmed tactical errors; ball and opponent context still matters.</p></article>
+            <article class="panel pair-coach-panel"><p class="eyebrow">PAIR COACH</p><h2 id="pairCoachHeadline">Analyse yourself and a partner</h2><div id="pairStrengths" class="pair-feedback-block"><b>What you do well</b><ul></ul></div><div id="pairImprovements" class="pair-feedback-block warning"><b>Work on together</b><ul></ul></div><div class="pair-gap-summary"><span>Average partner gap <b id="averagePairGap">—</b></span><span>Largest partner gap <b id="largestPairGap">—</b></span></div></article>
+          </div>
+          <article class="panel pair-events-panel"><div class="panel-head"><div><p class="eyebrow">REVIEW TOGETHER</p><h2>Most useful spacing moments</h2><p>Select a moment to see where the pair and exposed court space were positioned.</p></div><span id="pairCoveragePill" class="positive-pill"></span></div><div id="pairEventList" class="pair-event-list"></div></article>
+        </div>
       </section>
 
       <section id="upload" class="page" aria-labelledby="uploadTitle">
@@ -186,6 +200,7 @@
             </ol>
             <p>After marker 5, adding two more player references later in the video is optional but strongly recommended for more reliable tracking.</p>
           </div>
+          <label class="pair-analysis-toggle"><input id="enablePartnerAnalysis" type="checkbox"><span><strong>Analyse my partner too</strong><small>After marking yourself, mark your partner on the same frames. PadelIQ will measure how well you move, recover and protect space together.</small></span></label>
           <div class="calibration-instructions"><strong id="calibrationPrompt">Click the top-left court corner</strong><span id="calibrationCount">0 court corners · 0 player references</span></div>
           <div class="calibration-stage" id="calibrationStage">
             <video id="calibrationVideo" controls muted playsinline aria-label="Uploaded match calibration frame"></video>

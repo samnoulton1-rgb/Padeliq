@@ -18,6 +18,7 @@ class CourtCalibration(BaseModel):
     corners: list[Point] = Field(min_length=4, max_length=4)
     player: Point | None = None
     player_references: list[PlayerReference] = Field(default_factory=list, max_length=5)
+    partner_references: list[PlayerReference] = Field(default_factory=list, max_length=5)
 
     def references(self) -> list[PlayerReference]:
         if self.player_references:
@@ -77,11 +78,38 @@ class RallyOutcome(BaseModel):
     model: str
 
 
+class PairEvent(BaseModel):
+    t: float
+    type: Literal["middle_gap", "left_space", "right_space", "depth_split"]
+    label: str
+    gap_metres: float
+    me_x: float
+    me_y: float
+    partner_x: float
+    partner_y: float
+
+
+class PairAnalysis(BaseModel):
+    quality_status: Literal["reliable", "unreliable"] = "unreliable"
+    pair_tracking_coverage_percent: float
+    partner_direct_tracking_coverage_percent: float
+    partner_positions: list[PositionPoint]
+    alignment_percent: float
+    healthy_spacing_percent: float
+    coordinated_transition_percent: float | None
+    middle_protection_percent: float
+    average_partner_gap_metres: float
+    largest_partner_gap_metres: float
+    pair_movement_score: int | None = None
+    open_space_events: list[PairEvent] = []
+
+
 class AnalysisResult(BaseModel):
-    version: str = "0.4"
+    version: str = "0.6"
     summary: AnalysisSummary
     positions: list[PositionPoint]
     rallies: list[RallyOutcome] = []
+    pair_analysis: PairAnalysis | None = None
     heatmap: list[list[float]]
     warnings: list[str]
     ai_feedback: AIFeedback | None = None
