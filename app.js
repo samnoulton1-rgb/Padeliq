@@ -7,6 +7,8 @@ function isLegacyDemoMatch(match){const signature=[match.isoDate,match.title,mat
 let currentFile = null;
 let calibrationPoints=[];
 let playerReferences=[];
+let uploadWakeLock=null;
+let analysisUploadActive=false;
 let liveAnalysisResult=null;
 let currentMatchMeta=null;
 let currentUser=null;
@@ -255,13 +257,17 @@ function runAnalysis(){
 
 async function runRealAnalysis(){
   try{
-    $('#analysisHeading').textContent='Uploading match securely…';$('#analysisDescription').textContent='Preparing the video-analysis job.';
+    analysisUploadActive=true;await requestUploadWakeLock();$('#analysisHeading').textContent='Uploading match securely…';$('#analysisDescription').textContent=uploadWakeLock?'Keep this tab open. PadelIQ is keeping your screen awake until the upload finishes.':'Keep this tab open and prevent your computer from sleeping until the upload finishes.';
     const calibration={corners:calibrationPoints.slice(0,4),player_references:playerReferences};
     const form=new FormData();form.append('video',currentFile);form.append('calibration',JSON.stringify(calibration));form.append('retain_diagnostic',$('#retainDiagnostic').checked?'true':'false');
     const response=await fetch(`${analysisApi.replace(/\/$/,'')}/jobs`,{method:'POST',body:form});if(!response.ok)throw new Error(await response.text());
-    const job=await response.json();await pollAnalysisJob(job.id);
-  }catch(error){$('#analysisHeading').textContent='Analysis could not start';$('#analysisDescription').textContent=error.message;$('#analysisProgress').style.width='0';}
+    const job=await response.json();analysisUploadActive=false;await releaseUploadWakeLock();$('#analysisDescription').textContent='Upload complete. Analysis will continue on the server if your computer sleeps.';await pollAnalysisJob(job.id);
+  }catch(error){analysisUploadActive=false;await releaseUploadWakeLock();$('#analysisHeading').textContent='Analysis could not start';$('#analysisDescription').textContent=error.message;$('#analysisProgress').style.width='0';}
 }
+async function requestUploadWakeLock(){if(!('wakeLock' in navigator))return;try{uploadWakeLock=await navigator.wakeLock.request('screen');uploadWakeLock.addEventListener('release',()=>{uploadWakeLock=null;});}catch(error){console.warn('Screen wake lock unavailable',error);}}
+async function releaseUploadWakeLock(){if(!uploadWakeLock)return;try{await uploadWakeLock.release();}catch(error){console.warn('Could not release screen wake lock',error);}uploadWakeLock=null;}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&analysisUploadActive&&!uploadWakeLock)requestUploadWakeLock();});
+window.addEventListener('beforeunload',event=>{if(!analysisUploadActive)return;event.preventDefault();event.returnValue='Your video is still uploading. Leaving now will stop the upload.';});
 async function pollAnalysisJob(jobId){
   const base=analysisApi.replace(/\/$/,'');
   while(true){
