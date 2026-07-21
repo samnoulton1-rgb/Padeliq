@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from .analyzer import PadelAnalyzer
 from .schemas import CourtCalibration, JobState, OutcomeJobState, PositionPoint
@@ -266,10 +266,11 @@ def get_diagnostic(token: str, kind: str) -> FileResponse:
     return FileResponse(path, media_type=media_type, filename=filename)
 
 
-@app.delete("/diagnostics/{token}", status_code=204)
-def delete_diagnostic(token: str) -> None:
+@app.delete("/diagnostics/{token}", status_code=204, response_class=Response)
+def delete_diagnostic(token: str) -> Response:
     """Immediately remove a retained source, overlay and any related outcome state."""
     item = diagnostics.pop(token, None)
     outcome_jobs.pop(token, None)
     if item is not None:
         shutil.rmtree(Path(item["directory"]), ignore_errors=True)
+    return Response(status_code=204)
