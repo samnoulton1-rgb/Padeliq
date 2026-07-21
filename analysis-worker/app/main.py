@@ -22,7 +22,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:8000").split(",")],
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -131,7 +131,7 @@ def health() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "service": "padeliq-analysis",
-        "version": "0.6.5",
+        "version": "0.6.6",
         "tracking_model": os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
         "video_llm": os.getenv("VLM_MODEL_ID", "Qwen/Qwen3-VL-2B-Instruct"),
         "video_llm_enabled": os.getenv("ENABLE_VIDEO_LLM", "true").lower() == "true",
@@ -264,3 +264,12 @@ def get_diagnostic(token: str, kind: str) -> FileResponse:
     media_type = "video/mp4"
     filename = "padeliq-source-video" + path.suffix if kind == "video" else "padeliq-tracking-diagnostic.mp4"
     return FileResponse(path, media_type=media_type, filename=filename)
+
+
+@app.delete("/diagnostics/{token}", status_code=204)
+def delete_diagnostic(token: str) -> None:
+    """Immediately remove a retained source, overlay and any related outcome state."""
+    item = diagnostics.pop(token, None)
+    outcome_jobs.pop(token, None)
+    if item is not None:
+        shutil.rmtree(Path(item["directory"]), ignore_errors=True)

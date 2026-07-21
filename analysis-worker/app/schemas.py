@@ -29,6 +29,8 @@ class CourtCalibration(BaseModel):
 
 
 class AnalysisSummary(BaseModel):
+    methodology_version: str = "positioning-1.0"
+    validation_status: Literal["quality_gated_beta"] = "quality_gated_beta"
     duration_seconds: float
     analysed_frames: int
     tracked_frames: int
@@ -108,11 +110,15 @@ class PairAnalysis(BaseModel):
     average_partner_gap_metres: float
     largest_partner_gap_metres: float
     pair_movement_score: int | None = None
+    metric_confidence: int = Field(default=0, ge=0, le=100)
+    paired_samples: int = 0
+    methodology_version: str = "pair-positioning-1.0"
+    validation_status: Literal["quality_gated_beta"] = "quality_gated_beta"
     open_space_events: list[PairEvent] = []
 
 
 class AnalysisResult(BaseModel):
-    version: str = "0.6.5"
+    version: str = "0.6.6"
     summary: AnalysisSummary
     positions: list[PositionPoint]
     rallies: list[RallyOutcome] = []

@@ -238,7 +238,7 @@ class PadelAnalyzer:
         joined = [(me_by_sample[key], partner_by_sample[key]) for key in sorted(me_by_sample.keys() & partner_by_sample.keys())]
         pair_coverage = len(joined) / max(1, analysed) * 100
         partner_direct_coverage = partner_direct_tracked / max(1, analysed) * 100
-        reliable = self_quality == "reliable" and pair_coverage >= 60 and partner_direct_coverage >= 50
+        reliable = self_quality == "reliable" and pair_coverage >= 70 and partner_direct_coverage >= 60 and len(joined) >= 120
 
         def depth(point: dict[str, float]) -> float:
             return point["y"] if point["y"] <= 10 else 20 - point["y"]
@@ -284,6 +284,7 @@ class PadelAnalyzer:
         middle_percent = middle_protected / count * 100
         transition_for_score = transition_percent if transition_percent is not None else 60.0
         score = round(alignment_percent * .30 + spacing_percent * .25 + transition_for_score * .20 + middle_percent * .25) if reliable else None
+        pair_confidence = max(0, min(100, round(pair_coverage * .4 + partner_direct_coverage * .4 + min(100, len(joined) / 4) * .2)))
         public_partner = [{key: value for key, value in point.items() if key != "sample"} for point in partner_positions[::4]]
         return PairAnalysis(
             quality_status="reliable" if reliable else "unreliable",
@@ -297,6 +298,8 @@ class PadelAnalyzer:
             average_partner_gap_metres=round(float(np.mean(gaps)), 1) if gaps else 0,
             largest_partner_gap_metres=round(max(gaps), 1) if gaps else 0,
             pair_movement_score=score,
+            metric_confidence=pair_confidence,
+            paired_samples=len(joined),
             open_space_events=events[:16],
         )
 
@@ -478,7 +481,7 @@ class PadelAnalyzer:
             pair_analysis = self._pair_analysis(positions, partner_positions, analysed, partner_direct_tracked, quality_status)
             warnings.append(f"Partner tracking used {partner_direct_tracked} direct detections and {partner_interpolated} short-gap estimates.")
             if pair_analysis.quality_status == "unreliable":
-                warnings.append("Pair scores are withheld because both-player tracking did not meet the pair reliability gate.")
+                warnings.append("Pair scores are withheld unless paired coverage reaches 70%, partner direct detections reach 60%, and at least 120 paired samples are available.")
         summary = AnalysisSummary(
             duration_seconds=round(duration, 2),
             analysed_frames=analysed,
