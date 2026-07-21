@@ -4,6 +4,7 @@ import json
 import os
 import re
 from pathlib import Path
+from typing import Callable
 
 import cv2
 import numpy as np
@@ -110,10 +111,10 @@ class VideoFeedbackAnalyzer:
                 merged[-1] = (merged[-1][0], window[1])
             else:
                 merged.append(window)
-        return merged[:40]
+        return merged[: max(1, int(os.getenv("MAX_RALLY_CANDIDATES", "16")))]
 
     @staticmethod
-    def _window_frames(video_path: Path, start: float, end: float, count: int = 5) -> list[Image.Image]:
+    def _window_frames(video_path: Path, start: float, end: float, count: int = 3) -> list[Image.Image]:
         capture = cv2.VideoCapture(str(video_path))
         images: list[Image.Image] = []
         window_start = max(start, end - 4.5)
@@ -130,7 +131,13 @@ class VideoFeedbackAnalyzer:
         capture.release()
         return images
 
-    def analyze_rallies(self, marked_video_path: Path, positions: list[PositionPoint]) -> list[RallyOutcome]:
+    def analyze_rallies(
+        self,
+        marked_video_path: Path,
+        positions: list[PositionPoint],
+        partner_positions: list[PositionPoint] | None = None,
+        progress_callback: Callable[[int, str], None] | None = None,
+    ) -> list[RallyOutcome]:
         self._load()
         windows = self._rally_windows(marked_video_path)
         outcomes: list[RallyOutcome] = []
@@ -156,7 +163,7 @@ Return one item for every candidate index from {batch_start + 1} to {batch_start
                 [{"role": "user", "content": content}], tokenize=True, add_generation_prompt=True,
                 return_dict=True, return_tensors="pt"
             ).to(self.model.device)
-            generated = self.model.generate(**inputs, max_new_tokens=450, do_sample=False)
+            generated = self.model.generate(**inputs, max_new_tokens=300, do_sample=False)
             new_tokens = generated[0][inputs["input_ids"].shape[1] :]
             data = self._json(self.processor.decode(new_tokens, skip_special_tokens=True))
             by_index = {int(item.get("index", -1)): item for item in data.get("rallies", [])}
@@ -167,6 +174,7 @@ Return one item for every candidate index from {batch_start + 1} to {batch_start
                 confidence = max(0.0, min(1.0, float(item.get("confidence", 0))))
                 outcome = raw_outcome if raw_outcome in {"won", "lost"} and item.get("is_rally_end") and confidence >= 0.72 else "unknown"
                 nearest = min(positions, key=lambda point: abs(point.t - end)) if positions else None
+                nearest_partner = min(partner_positions, key=lambda point: abs(point.t - end)) if partner_positions else None
                 zone = "unknown"
                 if nearest is not None:
                     zone = "net" if 8 <= nearest.y <= 12 else "back" if nearest.y <= 6 or nearest.y >= 14 else "transition"
@@ -174,10 +182,15 @@ Return one item for every candidate index from {batch_start + 1} to {batch_start
                     RallyOutcome(
                         id=f"rally-{rally_index}", start_seconds=round(start, 2), end_seconds=round(end, 2),
                         outcome=outcome, confidence=round(confidence, 3), x=nearest.x if nearest else None,
-                        y=nearest.y if nearest else None, zone=zone,
+                        y=nearest.y if nearest else None,
+                        partner_x=nearest_partner.x if nearest_partner else None,
+                        partner_y=nearest_partner.y if nearest_partner else None, zone=zone,
                         reason=str(item.get("reason", "Insufficient visible evidence"))[:240], model=self.model_id,
                     )
                 )
+            if progress_callback:
+                completed = min(len(windows), batch_start + len(batch))
+                progress_callback(completed, f"Reviewed {completed} of {len(windows)} likely rally endings")
         return outcomes
 
     def analyze(self, video_path: Path, summary: AnalysisSummary) -> AIFeedback:

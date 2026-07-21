@@ -52,3 +52,5 @@ html{scroll-behavior:smooth}.sr-only{position:absolute;width:1px;height:1px;padd
   .rally-outcome-row{grid-template-columns:58px 1fr}.rally-outcome-row span:last-child{grid-column:1/-1}
   .toast{left:16px;right:16px;bottom:16px;text-align:center}
 }
+.position-metric-list>div{gap:5px 8px}.position-metric-list small{grid-column:1/-1;color:#6f8795;font-size:9px;font-weight:700}
+.pair-event{cursor:pointer}.pair-event a,.rally-outcome-row a{color:#147db9;font-weight:800;text-decoration:underline;text-underline-offset:2px}.pair-event a:hover,.rally-outcome-row a:hover{color:#0b5d89}

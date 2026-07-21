@@ -38,6 +38,11 @@ class AnalysisSummary(BaseModel):
     identity_reacquisitions: int = 0
     quality_status: str = "unreliable"
     distance_metres: float
+    meaningful_movement_metres_per_active_minute: float | None = None
+    meaningful_movement_range_low: float | None = None
+    meaningful_movement_range_high: float | None = None
+    active_movement_minutes: float | None = None
+    metric_confidence: dict[str, int] = {}
     average_speed_kmh: float
     maximum_speed_kmh: float
     net_zone_percent: float
@@ -73,6 +78,8 @@ class RallyOutcome(BaseModel):
     confidence: float = Field(ge=0, le=1)
     x: float | None = None
     y: float | None = None
+    partner_x: float | None = None
+    partner_y: float | None = None
     zone: Literal["net", "transition", "back", "unknown"] = "unknown"
     reason: str
     model: str
@@ -105,7 +112,7 @@ class PairAnalysis(BaseModel):
 
 
 class AnalysisResult(BaseModel):
-    version: str = "0.6.3"
+    version: str = "0.6.5"
     summary: AnalysisSummary
     positions: list[PositionPoint]
     rallies: list[RallyOutcome] = []

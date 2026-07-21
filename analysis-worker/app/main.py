@@ -94,7 +94,13 @@ def run_job(job_id: str, video_path: Path, calibration: CourtCalibration, retain
             shutil.rmtree(video_path.parent, ignore_errors=True)
 
 
-def run_outcome_job(token: str, video_path: Path, positions: list[PositionPoint], cleanup_directory: bool = True) -> None:
+def run_outcome_job(
+    token: str,
+    video_path: Path,
+    positions: list[PositionPoint],
+    partner_positions: list[PositionPoint] | None = None,
+    cleanup_directory: bool = True,
+) -> None:
     global feedback_analyzer
     try:
         outcome_jobs[token] = outcome_jobs[token].model_copy(
@@ -102,8 +108,12 @@ def run_outcome_job(token: str, video_path: Path, positions: list[PositionPoint]
         )
         if feedback_analyzer is None:
             feedback_analyzer = VideoFeedbackAnalyzer()
+        def report_progress(completed: int, message: str) -> None:
+            total = max(1, int(os.getenv("MAX_RALLY_CANDIDATES", "16")))
+            progress = min(95, 15 + round(80 * completed / total))
+            outcome_jobs[token] = outcome_jobs[token].model_copy(update={"progress": progress, "message": message})
         with model_lock:
-            rallies = feedback_analyzer.analyze_rallies(video_path, positions)
+            rallies = feedback_analyzer.analyze_rallies(video_path, positions, partner_positions or [], report_progress)
         outcome_jobs[token] = outcome_jobs[token].model_copy(
             update={"status": "complete", "progress": 100, "message": "Outcome estimates ready", "rallies": rallies}
         )
@@ -121,7 +131,7 @@ def health() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "service": "padeliq-analysis",
-        "version": "0.6.3",
+        "version": "0.6.5",
         "tracking_model": os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
         "video_llm": os.getenv("VLM_MODEL_ID", "Qwen/Qwen3-VL-2B-Instruct"),
         "video_llm_enabled": os.getenv("ENABLE_VIDEO_LLM", "true").lower() == "true",
@@ -133,12 +143,14 @@ async def create_outcome_job(
     background_tasks: BackgroundTasks,
     video: UploadFile = File(...),
     positions: str = Form(...),
+    partner_positions: str = Form("[]"),
     token: str | None = Form(None),
 ) -> OutcomeJobState:
     if video.content_type and not video.content_type.startswith("video/"):
         raise HTTPException(415, "A video file is required")
     try:
         parsed_positions = [PositionPoint.model_validate(item) for item in json.loads(positions)]
+        parsed_partner_positions = [PositionPoint.model_validate(item) for item in json.loads(partner_positions)]
     except Exception as exc:
         raise HTTPException(422, f"Invalid tracked positions: {exc}") from exc
     if not parsed_positions:
@@ -159,7 +171,7 @@ async def create_outcome_job(
             target.write(chunk)
     state = OutcomeJobState(token=outcome_token, status="queued")
     outcome_jobs[outcome_token] = state
-    background_tasks.add_task(run_outcome_job, outcome_token, video_path, parsed_positions)
+    background_tasks.add_task(run_outcome_job, outcome_token, video_path, parsed_positions, parsed_partner_positions)
     return state
 
 
@@ -168,6 +180,7 @@ async def create_retained_outcome_job(
     token: str,
     background_tasks: BackgroundTasks,
     positions: str = Form(...),
+    partner_positions: str = Form("[]"),
 ) -> OutcomeJobState:
     cleanup_expired_diagnostics()
     item = diagnostics.get(token)
@@ -175,6 +188,7 @@ async def create_retained_outcome_job(
         raise HTTPException(404, "Retained video not found or expired")
     try:
         parsed_positions = [PositionPoint.model_validate(point) for point in json.loads(positions)]
+        parsed_partner_positions = [PositionPoint.model_validate(point) for point in json.loads(partner_positions)]
     except Exception as exc:
         raise HTTPException(422, f"Invalid tracked positions: {exc}") from exc
     if not parsed_positions:
@@ -184,7 +198,7 @@ async def create_retained_outcome_job(
         return existing
     state = OutcomeJobState(token=token, status="queued", message="Queued for point-outcome review")
     outcome_jobs[token] = state
-    background_tasks.add_task(run_outcome_job, token, Path(item["video"]), parsed_positions, False)
+    background_tasks.add_task(run_outcome_job, token, Path(item["video"]), parsed_positions, parsed_partner_positions, False)
     return state
 
 

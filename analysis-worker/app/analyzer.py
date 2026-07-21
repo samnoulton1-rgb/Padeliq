@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import supervision as sv
 import torch
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, gaussian_filter1d, median_filter
 from transformers import RTDetrForObjectDetection, RTDetrImageProcessor
 
 from .schemas import AnalysisResult, AnalysisSummary, CourtCalibration, PairAnalysis, PairEvent, PlayerReference
@@ -135,6 +135,46 @@ class PadelAnalyzer:
             return 0, None, None
         within_two = sum(duration <= 2.0 for duration in durations) / len(durations) * 100
         return len(durations), float(np.median(durations)), float(within_two)
+
+    @staticmethod
+    def _meaningful_movement(positions: list[dict[str, float]]) -> tuple[float | None, float | None, float | None, float | None]:
+        """Estimate meaningful ground movement without accumulating frame jitter."""
+        if len(positions) < 16:
+            return None, None, None, None
+        times = np.asarray([point["t"] for point in positions], dtype=float)
+        coords = np.asarray([[point["x"], point["y"]] for point in positions], dtype=float)
+        unique_times, unique_indices = np.unique(times, return_index=True)
+        if len(unique_times) < 8 or unique_times[-1] - unique_times[0] < 3:
+            return None, None, None, None
+        coords = coords[unique_indices]
+        # Median filtering removes one-frame jumps; gentle Gaussian smoothing
+        # suppresses bounding-box foot jitter without erasing real transitions.
+        smooth_x = gaussian_filter1d(median_filter(coords[:, 0], size=5, mode="nearest"), sigma=1.0)
+        smooth_y = gaussian_filter1d(median_filter(coords[:, 1], size=5, mode="nearest"), sigma=1.0)
+        sample_times = np.arange(unique_times[0], unique_times[-1] + 0.001, 0.5)
+        if len(sample_times) < 4:
+            return None, None, None, None
+        sample_x = np.interp(sample_times, unique_times, smooth_x)
+        sample_y = np.interp(sample_times, unique_times, smooth_y)
+        segments = np.hypot(np.diff(sample_x), np.diff(sample_y))
+        speeds = segments / 0.5
+        plausible = speeds <= 7.0
+        moving = (speeds >= 0.35) & plausible
+        # Include two seconds around genuine movement so active time reflects a
+        # rally sequence rather than only the instant a distance threshold fires.
+        active = np.convolve(moving.astype(int), np.ones(9, dtype=int), mode="same") > 0
+        active_seconds = float(np.sum(active) * 0.5)
+        if active_seconds < 5:
+            return None, None, None, None
+
+        def rate(deadband: float) -> float:
+            distance = float(np.sum(segments[active & plausible & (segments >= deadband)]))
+            return distance / (active_seconds / 60)
+
+        central = rate(0.25)
+        lower = rate(0.35)
+        upper = rate(0.15)
+        return central, lower, upper, active_seconds / 60
 
     def _choose_target(
         self,
@@ -305,7 +345,8 @@ class PadelAnalyzer:
                 continue
             if diagnostic_path is not None and writer is None:
                 height, width = frame.shape[:2]
-                writer = cv2.VideoWriter(str(diagnostic_path), cv2.VideoWriter_fourcc(*"mp4v"), sample_rate, (width, height))
+                diagnostic_fps = max(1.0, fps / sample_every)
+                writer = cv2.VideoWriter(str(diagnostic_path), cv2.VideoWriter_fourcc(*"mp4v"), diagnostic_fps, (width, height))
             detections = tracker.update_with_detections(self._detect_people(frame))
             analysed += 1
             timestamp = frame_index / fps
@@ -417,6 +458,14 @@ class PadelAnalyzer:
         net = sum(8 <= p["y"] <= 12 for p in positions)
         transition = len(positions) - back - net
         recoveries, median_recovery, within_two = self._recovery_metrics(positions)
+        movement_rate, movement_low, movement_high, active_minutes = self._meaningful_movement(positions)
+        interpolation_ratio = interpolated / max(1, len(positions))
+        base_confidence = max(0, min(100, round(direct_coverage - min(24, reacquisitions * 3) - interpolation_ratio * 20)))
+        boundary_ambiguous = sum(min(abs(point["y"] - boundary) for boundary in (6, 8, 12, 14)) < 0.5 for point in positions) / len(positions)
+        zone_confidence = max(0, min(100, round(base_confidence - boundary_ambiguous * 25)))
+        recovery_sample_confidence = min(100, recoveries * 18)
+        recovery_confidence = max(0, min(100, round(base_confidence * .65 + recovery_sample_confidence * .35)))
+        movement_confidence = max(0, min(100, round(base_confidence - interpolation_ratio * 15)))
         warnings = [
             "Recovery is an excursion-to-base proxy until shot contact events are available.",
             "Distance is filtered to remove implausible tracking jumps.",
@@ -440,6 +489,11 @@ class PadelAnalyzer:
             identity_reacquisitions=reacquisitions,
             quality_status=quality_status,
             distance_metres=round(distance, 1),
+            meaningful_movement_metres_per_active_minute=round(movement_rate, 1) if movement_rate is not None else None,
+            meaningful_movement_range_low=round(movement_low, 1) if movement_low is not None else None,
+            meaningful_movement_range_high=round(movement_high, 1) if movement_high is not None else None,
+            active_movement_minutes=round(active_minutes, 2) if active_minutes is not None else None,
+            metric_confidence={"movement": movement_confidence, "court_zones": zone_confidence, "recovery": recovery_confidence},
             average_speed_kmh=round((np.mean(valid_speeds) if valid_speeds else 0) * 3.6, 1),
             maximum_speed_kmh=round((max(valid_speeds) if valid_speeds else 0) * 3.6, 1),
             net_zone_percent=round(net / len(positions) * 100, 1),
