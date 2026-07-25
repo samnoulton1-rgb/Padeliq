@@ -1,0 +1,125 @@
+{
+  "generated_at": "2026-07-25T15:19:38+00:00",
+  "refresh_interval_days": 3,
+  "source": "OpenStreetMap contributors via Overpass API",
+  "source_url": "https://www.openstreetmap.org/copyright",
+  "license": "ODbL 1.0",
+  "regions": [
+    "London",
+    "Outer London",
+    "Kent",
+    "Essex"
+  ],
+  "clubs": [
+    {
+      "name": "Brakepoint Padel Club",
+      "region": "Kent",
+      "area": "CT1 3RA",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://www.openstreetmap.org/way/1228630180",
+      "source": "https://www.openstreetmap.org/way/1228630180",
+      "latitude": 51.274344,
+      "longitude": 1.070586
+    },
+    {
+      "name": "Instantpadel",
+      "region": "London",
+      "area": "Location available on source map",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://www.openstreetmap.org/way/1430290620",
+      "source": "https://www.openstreetmap.org/way/1430290620",
+      "latitude": 51.496154,
+      "longitude": -0.048067
+    },
+    {
+      "name": "Padel Pod",
+      "region": "London",
+      "area": "London · N8 8RE",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://thepadelpod.co.uk/about/flagship-site/",
+      "source": "https://www.openstreetmap.org/way/1417698627",
+      "latitude": 51.582313,
+      "longitude": -0.130047
+    },
+    {
+      "name": "Padel Social Club",
+      "region": "London",
+      "area": "Location available on source map",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://www.openstreetmap.org/way/1479188134",
+      "source": "https://www.openstreetmap.org/way/1479188134",
+      "latitude": 51.50468,
+      "longitude": 0.002363
+    },
+    {
+      "name": "Rocket Padel",
+      "region": "London",
+      "area": "Location available on source map",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://www.rocketpadel.com/club/Battersea-power-station",
+      "source": "https://www.openstreetmap.org/way/1414173625",
+      "latitude": 51.482786,
+      "longitude": -0.142613
+    },
+    {
+      "name": "Rocks Lane Chiswick",
+      "region": "London",
+      "area": "London · W4 1RZ",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://rockslane.co.uk",
+      "source": "https://www.openstreetmap.org/node/7368055523",
+      "latitude": 51.494797,
+      "longitude": -0.257837
+    },
+    {
+      "name": "Stratford Padel Club",
+      "region": "London",
+      "area": "London · E15 2AE",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://stratfordpadelclub.org",
+      "source": "https://www.openstreetmap.org/node/6327184639",
+      "latitude": 51.5346,
+      "longitude": -0.005786
+    },
+    {
+      "name": "The 108",
+      "region": "London",
+      "area": "London · NW2 1LT",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://the108.co.uk/",
+      "source": "https://www.openstreetmap.org/node/12227822923",
+      "latitude": 51.570536,
+      "longitude": -0.225725
+    },
+    {
+      "name": "The Courts at Hyde Park",
+      "region": "London",
+      "area": "London · W2 2UH",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://parksports.co.uk/venues/hyde-park/",
+      "source": "https://www.openstreetmap.org/node/11780254990",
+      "latitude": 51.503199,
+      "longitude": -0.173256
+    },
+    {
+      "name": "Wembley Padel",
+      "region": "London",
+      "area": "Location available on source map",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://www.openstreetmap.org/way/1347753660",
+      "source": "https://www.openstreetmap.org/way/1347753660",
+      "latitude": 51.556369,
+      "longitude": -0.282586
+    }
+  ]
+}

@@ -71,6 +71,9 @@ const clubDirectoryRows=[
   {name:'Epping Golf Course',region:'Essex',area:'Epping',courts:'See venue',setting:'Outdoor',website:'https://playtomic.com/clubs/epping-golf-course'},
   {name:'Padel District Waltham Abbey',region:'Essex',area:'Waltham Abbey',courts:'See venue',setting:'See venue',website:'https://playtomic.com/clubs/padel-district-waltham-abbey'}
 ];
+let liveClubDirectoryRows=[];
+let clubDirectoryGeneratedAt=null;
+let clubDirectoryLoadPromise=null;
 const pendingMatchSaves=new Map();
 const analysisApi=window.PADELIQ_ANALYSIS_API||localStorage.getItem('padeliqAnalysisApi')||'https://samnoul-padeliq.hf.space';
 
@@ -567,16 +570,28 @@ async function updateTimeGreeting(){const deviceZone=Intl.DateTimeFormat().resol
 
 const supabaseClient=window.supabase.createClient('https://lsotekuhbrdtfmlyindd.supabase.co','sb_publishable_p7OOWIbybkMLLfRB1w8t6A_UxIXyarb');
 function clubText(key){const lang=localStorage.getItem('padeliqLanguage')||'en';return translations[lang]?.[key]||translations.en[key]||key;}
+const directoryRefreshCopy={
+  en:{refresh:'updates every 3 days',source:'Automatically checked every three days using public venue data.',confirm:'Confirm details with the venue before travelling.'},
+  es:{refresh:'se actualiza cada 3 días',source:'Comprobado automáticamente cada tres días con datos públicos de instalaciones.',confirm:'Confirma los datos con el club antes de viajar.'},
+  fr:{refresh:'mise à jour tous les 3 jours',source:'Vérification automatique tous les trois jours à partir de données publiques.',confirm:'Vérifiez les informations auprès du club avant de partir.'},
+  de:{refresh:'Aktualisierung alle 3 Tage',source:'Alle drei Tage automatisch anhand öffentlicher Anlagendaten geprüft.',confirm:'Details vor der Anreise beim Club bestätigen.'},
+  it:{refresh:'aggiornamento ogni 3 giorni',source:'Controllo automatico ogni tre giorni tramite dati pubblici.',confirm:'Conferma i dettagli con il club prima di partire.'},
+  nl:{refresh:'elke 3 dagen bijgewerkt',source:'Elke drie dagen automatisch gecontroleerd met openbare locatiegegevens.',confirm:'Controleer de gegevens bij de club voordat je vertrekt.'},
+  el:{refresh:'ενημέρωση κάθε 3 ημέρες',source:'Αυτόματος έλεγχος κάθε τρεις ημέρες με δημόσια δεδομένα εγκαταστάσεων.',confirm:'Επιβεβαιώστε τα στοιχεία με τον σύλλογο πριν ταξιδέψετε.'}
+};
 function safeExternalUrl(value){try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:'';}catch{return '';}}
+function clubDirectoryKey(club){return String(club?.name||'').toLowerCase().replace(/[^a-z0-9]+/g,'');}
+function mergedClubDirectoryRows(){const known=new Set(clubDirectoryRows.map(clubDirectoryKey)),discoveries=liveClubDirectoryRows.filter(club=>!known.has(clubDirectoryKey(club)));return [...clubDirectoryRows,...discoveries].sort((left,right)=>left.region.localeCompare(right.region)||left.name.localeCompare(right.name));}
 function renderClubs(){
   const body=$('#clubTableBody');if(!body)return;
   const query=($('#clubSearch')?.value||'').trim().toLowerCase(),region=$('#clubRegionFilter')?.value||'all';
-  const rows=clubDirectoryRows.filter(club=>(region==='all'||club.region===region)&&(!query||[club.name,club.region,club.area].some(value=>value.toLowerCase().includes(query))));
+  const rows=mergedClubDirectoryRows().filter(club=>(region==='all'||club.region===region)&&(!query||[club.name,club.region,club.area].some(value=>String(value).toLowerCase().includes(query))));
   $('#clubCount').textContent=`${rows.length} ${rows.length===1?'club':'clubs'}`;
+  const language=localStorage.getItem('padeliqLanguage')||'en',refreshCopy=directoryRefreshCopy[language]||directoryRefreshCopy.en,freshness=$('#clubDirectoryFreshness');if(freshness){const checked=clubDirectoryGeneratedAt?new Date(clubDirectoryGeneratedAt).toLocaleDateString(language,{day:'numeric',month:'short',year:'numeric'}):'curated directory fallback';freshness.textContent=`${clubText('lastChecked')}: ${checked} · ${refreshCopy.refresh} · ${clubText('directoryDisclaimer')}`;}const attribution=$('#directoryAttribution');if(attribution)attribution.innerHTML=`${escapeHtml(refreshCopy.source)} © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · ODbL. ${escapeHtml(refreshCopy.confirm)}`;
   if(!rows.length){body.innerHTML=`<tr><td colspan="6" class="empty-clubs">${escapeHtml(clubText('noClubs'))}</td></tr>`;return;}
   body.innerHTML=rows.map(club=>{const url=safeExternalUrl(club.website);return `<tr><td><span class="club-name">${escapeHtml(club.name)}</span><span class="club-subtext verified-source">✓ ${escapeHtml(clubText('publicSource'))}</span></td><td><span class="region-pill">${escapeHtml(club.region)}</span></td><td>${escapeHtml(club.area)}</td><td><strong>${escapeHtml(club.courts)}</strong></td><td><span class="setting-pill">${escapeHtml(club.setting)}</span></td><td><a class="venue-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(clubText('viewVenue'))} ↗</a></td></tr>`;}).join('');
 }
-function loadClubs(){renderClubs();}
+async function loadClubs(){renderClubs();if(clubDirectoryLoadPromise)return clubDirectoryLoadPromise;clubDirectoryLoadPromise=fetch(`data/club-directory.json?v=${Math.floor(Date.now()/3600000)}`,{cache:'no-store'}).then(response=>{if(!response.ok)throw new Error(`Directory returned ${response.status}`);return response.json();}).then(document=>{if(!Array.isArray(document.clubs))throw new Error('Directory data is invalid');liveClubDirectoryRows=document.clubs.filter(club=>club&&club.name&&club.region&&club.area&&safeExternalUrl(club.website));clubDirectoryGeneratedAt=document.generated_at||null;renderClubs();}).catch(error=>{console.warn('Automated club directory unavailable',error.message);renderClubs();}).finally(()=>{clubDirectoryLoadPromise=null;});return clubDirectoryLoadPromise;}
 $('#clubSearch').addEventListener('input',renderClubs);
 $('#clubRegionFilter').addEventListener('change',renderClubs);
 async function submitContactForm(event){
