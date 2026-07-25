@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 import tempfile
@@ -16,8 +17,15 @@ from fastapi.responses import FileResponse, Response
 from .analyzer import PadelAnalyzer
 from .schemas import CourtCalibration, JobState, OutcomeJobState, PositionPoint
 from .video_feedback import VideoFeedbackAnalyzer
+from .reproducibility import (
+    ANALYSIS_CONFIG_ID,
+    SERVICE_VERSION,
+    canonical_sha256,
+    configure_determinism,
+)
 
-app = FastAPI(title="PadelIQ Analysis Worker", version="0.1.0")
+configure_determinism()
+app = FastAPI(title="PadelIQ Analysis Worker", version=SERVICE_VERSION)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:8000").split(",")],
@@ -30,6 +38,7 @@ jobs: dict[str, JobState] = {}
 outcome_jobs: dict[str, OutcomeJobState] = {}
 jobs_lock = threading.Lock()
 model_lock = threading.Lock()
+tracking_model_lock = threading.Lock()
 analyzer: PadelAnalyzer | None = None
 feedback_analyzer: VideoFeedbackAnalyzer | None = None
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(500 * 1024 * 1024)))
@@ -92,20 +101,42 @@ def update_job(job_id: str, **values) -> None:
         jobs[job_id] = job.model_copy(update=values)
 
 
-def run_job(job_id: str, video_path: Path, calibration: CourtCalibration, retain_diagnostic: bool) -> None:
+def run_job(
+    job_id: str,
+    video_path: Path,
+    calibration: CourtCalibration,
+    retain_diagnostic: bool,
+    video_sha256: str,
+    client_fingerprint: str | None,
+) -> None:
     global analyzer, feedback_analyzer
     try:
         update_job(job_id, status="processing", progress=2, message="Loading analysis model")
         if analyzer is None:
-            analyzer = PadelAnalyzer(os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"))
+            analyzer = PadelAnalyzer(
+                os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
+                os.getenv("MODEL_REVISION", "df939e661d8c52e80608d1ec566561aabd25a4e7"),
+            )
         # The marked overlay is also the input for selected-player rally review.
         diagnostic_path = video_path.parent / "tracking-diagnostic.mp4"
-        result = analyzer.analyze(
-            video_path,
-            calibration,
-            lambda progress, message: update_job(job_id, progress=progress, message=message),
-            diagnostic_path=diagnostic_path,
+        with tracking_model_lock:
+            result = analyzer.analyze(
+                video_path,
+                calibration,
+                lambda progress, message: update_job(job_id, progress=progress, message=message),
+                diagnostic_path=diagnostic_path,
+            )
+        calibration_sha256 = canonical_sha256(calibration.model_dump(mode="json"))
+        result.video_sha256 = video_sha256
+        result.client_fingerprint = client_fingerprint
+        result.calibration_sha256 = calibration_sha256
+        result.reproducibility_key = canonical_sha256(
+            {"video": video_sha256, "calibration": calibration_sha256, "config": ANALYSIS_CONFIG_ID}
         )
+        result.model_versions = {
+            "tracking_model": os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
+            "tracking_revision": os.getenv("MODEL_REVISION", "df939e661d8c52e80608d1ec566561aabd25a4e7"),
+        }
         # Complete the measured positioning report immediately. Video-LLM rally
         # review is launched separately by the client for retained videos, so a
         # slow model load or generation can never hold the core report at 98%.
@@ -177,8 +208,9 @@ def health() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "service": "padeliq-analysis",
-        "version": "0.7.0",
+        "version": SERVICE_VERSION,
         "tracking_model": os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
+        "tracking_revision": os.getenv("MODEL_REVISION", "df939e661d8c52e80608d1ec566561aabd25a4e7"),
         "video_llm": os.getenv("OUTCOME_MODEL_ID", "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"),
         "video_llm_enabled": os.getenv("ENABLE_VIDEO_LLM", "true").lower() == "true",
     }
@@ -267,6 +299,7 @@ async def create_job(
     video: UploadFile = File(...),
     calibration: str = Form(...),
     retain_diagnostic: bool = Form(False),
+    client_fingerprint: str | None = Form(None),
 ) -> JobState:
     cleanup_expired_diagnostics()
     if video.content_type and not video.content_type.startswith("video/"):
@@ -284,6 +317,7 @@ async def create_job(
     suffix = Path(video.filename or "match.mp4").suffix or ".mp4"
     video_path = directory / f"match{suffix}"
     uploaded_bytes = 0
+    video_digest = hashlib.sha256()
     with video_path.open("wb") as target:
         while chunk := await video.read(1024 * 1024):
             uploaded_bytes += len(chunk)
@@ -291,9 +325,18 @@ async def create_job(
                 shutil.rmtree(directory, ignore_errors=True)
                 raise HTTPException(413, "The uploaded video is too large")
             target.write(chunk)
+            video_digest.update(chunk)
     state = JobState(id=job_id, status="queued")
     jobs[job_id] = state
-    background_tasks.add_task(run_job, job_id, video_path, parsed_calibration, retain_diagnostic)
+    background_tasks.add_task(
+        run_job,
+        job_id,
+        video_path,
+        parsed_calibration,
+        retain_diagnostic,
+        video_digest.hexdigest(),
+        client_fingerprint,
+    )
     return state
 
 

@@ -12,6 +12,16 @@ from scipy.ndimage import gaussian_filter, gaussian_filter1d, median_filter
 from transformers import RTDetrForObjectDetection, RTDetrImageProcessor
 
 from .schemas import AnalysisResult, AnalysisSummary, CourtCalibration, PairAnalysis, PairEvent, PlayerReference
+from .reproducibility import (
+    ANALYSIS_CONFIG_ID,
+    POSITIONING_METHOD_VERSION,
+    SCORING_METHOD_VERSION,
+    SAMPLE_RATE_FPS,
+    SERVICE_VERSION,
+    court_influence_percent,
+    position_score,
+    validate_calibration,
+)
 
 COURT_WIDTH_METRES = 10.0
 COURT_LENGTH_METRES = 20.0
@@ -21,10 +31,10 @@ MAX_INTERPOLATION_SECONDS = 1.0
 
 
 class PadelAnalyzer:
-    def __init__(self, model_id: str = "PekingU/rtdetr_r50vd") -> None:
+    def __init__(self, model_id: str = "PekingU/rtdetr_r50vd", model_revision: str | None = None) -> None:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.processor = RTDetrImageProcessor.from_pretrained(model_id)
-        self.model = RTDetrForObjectDetection.from_pretrained(model_id).to(self.device)
+        self.processor = RTDetrImageProcessor.from_pretrained(model_id, revision=model_revision)
+        self.model = RTDetrForObjectDetection.from_pretrained(model_id, revision=model_revision).to(self.device)
         self.model.eval()
 
     def _detect_people(self, frame: np.ndarray) -> sv.Detections:
@@ -316,9 +326,10 @@ class PadelAnalyzer:
         fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
         total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         duration = total_frames / fps if total_frames else 0.0
-        sample_rate = 8.0
+        sample_rate = SAMPLE_RATE_FPS
         sample_every = max(1, round(fps / sample_rate))
         expected_samples = max(1, total_frames // sample_every)
+        calibration_quality: dict[str, float] | None = None
         matrix = self._homography(calibration)
         references = calibration.references()
         partner_references = sorted(calibration.partner_references, key=lambda point: point.t)
@@ -343,6 +354,8 @@ class PadelAnalyzer:
             ok, frame = capture.read()
             if not ok:
                 break
+            if calibration_quality is None:
+                calibration_quality = validate_calibration(calibration.corners, frame.shape[1], frame.shape[0])
             if frame_index % sample_every:
                 frame_index += 1
                 continue
@@ -482,7 +495,9 @@ class PadelAnalyzer:
             warnings.append(f"Partner tracking used {partner_direct_tracked} direct detections and {partner_interpolated} short-gap estimates.")
             if pair_analysis.quality_status == "unreliable":
                 warnings.append("Pair scores are withheld unless paired coverage reaches 70%, partner direct detections reach 60%, and at least 120 paired samples are available.")
+        measured_influence = court_influence_percent(positions)
         summary = AnalysisSummary(
+            methodology_version=POSITIONING_METHOD_VERSION,
             duration_seconds=round(duration, 2),
             analysed_frames=analysed,
             tracked_frames=len(positions),
@@ -497,6 +512,7 @@ class PadelAnalyzer:
             meaningful_movement_range_high=round(movement_high, 1) if movement_high is not None else None,
             active_movement_minutes=round(active_minutes, 2) if active_minutes is not None else None,
             metric_confidence={"movement": movement_confidence, "court_zones": zone_confidence, "recovery": recovery_confidence},
+            court_influence_percent=measured_influence,
             average_speed_kmh=round((np.mean(valid_speeds) if valid_speeds else 0) * 3.6, 1),
             maximum_speed_kmh=round((max(valid_speeds) if valid_speeds else 0) * 3.6, 1),
             net_zone_percent=round(net / len(positions) * 100, 1),
@@ -507,5 +523,18 @@ class PadelAnalyzer:
             recovery_within_two_seconds_percent=round(within_two, 1) if within_two is not None else None,
         )
         progress(98, "Creating report")
+        measured_score = position_score(summary, positions)
         public_positions = [{key: value for key, value in point.items() if key != "sample"} for point in positions[::4]]
-        return AnalysisResult(summary=summary, positions=public_positions, pair_analysis=pair_analysis, heatmap=heatmap.round(4).tolist(), warnings=warnings)
+        return AnalysisResult(
+            version=SERVICE_VERSION,
+            position_score=measured_score,
+            scoring_methodology=SCORING_METHOD_VERSION,
+            analysis_config_id=ANALYSIS_CONFIG_ID,
+            calibration=calibration,
+            calibration_quality=calibration_quality or {},
+            summary=summary,
+            positions=public_positions,
+            pair_analysis=pair_analysis,
+            heatmap=heatmap.round(4).tolist(),
+            warnings=warnings,
+        )

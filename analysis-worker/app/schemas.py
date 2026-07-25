@@ -29,7 +29,7 @@ class CourtCalibration(BaseModel):
 
 
 class AnalysisSummary(BaseModel):
-    methodology_version: str = "positioning-1.0"
+    methodology_version: str = "positioning-2.0"
     validation_status: Literal["quality_gated_beta"] = "quality_gated_beta"
     duration_seconds: float
     analysed_frames: int
@@ -45,6 +45,7 @@ class AnalysisSummary(BaseModel):
     meaningful_movement_range_high: float | None = None
     active_movement_minutes: float | None = None
     metric_confidence: dict[str, int] = {}
+    court_influence_percent: float | None = None
     average_speed_kmh: float
     maximum_speed_kmh: float
     net_zone_percent: float
@@ -118,7 +119,17 @@ class PairAnalysis(BaseModel):
 
 
 class AnalysisResult(BaseModel):
-    version: str = "0.7.0"
+    version: str = "0.8.0"
+    position_score: int | None = Field(default=None, ge=0, le=100)
+    scoring_methodology: str = "position-score-2.0"
+    analysis_config_id: str = "rtdetr-r50vd-8fps-deterministic-v1"
+    video_sha256: str | None = None
+    client_fingerprint: str | None = None
+    calibration_sha256: str | None = None
+    reproducibility_key: str | None = None
+    calibration: CourtCalibration | None = None
+    calibration_quality: dict[str, float] = {}
+    model_versions: dict[str, str] = {}
     summary: AnalysisSummary
     positions: list[PositionPoint]
     rallies: list[RallyOutcome] = []

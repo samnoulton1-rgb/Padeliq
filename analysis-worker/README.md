@@ -10,6 +10,23 @@ pinned: false
 
 # PadelIQ analysis worker
 
+## Reproducibility contract
+
+Worker `0.8.0` makes the positioning pipeline versioned and deterministic. It:
+
+- fixes the frame-sampling rate and random seeds;
+- serialises tracking inference to prevent concurrent model-state variation;
+- pins the RT-DETR model revision;
+- calculates the position score on the server;
+- stores full-video, calibration and combined reproducibility hashes;
+- returns the calibration and analysis configuration with every report;
+- rejects crossed, undersized or implausibly ordered court calibration points.
+
+The web app fingerprints uploads using three one-megabyte samples. When the same
+user uploads identical footage with the active configuration, it reuses the
+existing calibration and immutable result instead of generating a second score.
+Trend reporting compares only reports with the same positioning methodology.
+
 An initial commercially friendly video-analysis service for court calibration, selected-player tracking, court positions, movement heatmaps, distance and recovery-position proxies. The tracker supports multiple time-stamped player references, appearance-and-motion identity reacquisition, court-side constraints, short-gap interpolation and a reliability gate. An optional Qwen3-VL layer turns sampled frames and measured metrics into cautious coaching feedback only after the tracking-quality gate passes.
 
 Users may explicitly opt in to 24-hour diagnostic retention. When enabled, the worker keeps the source video and a tracking-overlay copy behind an unguessable temporary token. Expired files are removed automatically; the default remains immediate deletion after analysis. Space storage is ephemeral, so diagnostics are best-effort and may disappear earlier if the worker restarts.
