@@ -21,7 +21,7 @@ Users may explicitly opt in to 24-hour diagnostic retention. When enabled, the w
 - ByteTrack through Supervision — MIT
 - PyTorch — BSD-style
 - Transformers — Apache 2.0
-- Qwen3-VL-2B-Instruct — Apache 2.0
+- SmolVLM2-500M-Video-Instruct — Apache 2.0
 
 Keep all dependency licence and notice files in production distributions. Do not substitute Ultralytics models without reviewing their AGPL/commercial terms.
 
@@ -32,6 +32,7 @@ docker build -t padeliq-analysis .
 docker run --rm -p 8080:8080 \
   -e ALLOWED_ORIGINS=https://your-app.vercel.app \
   -e ENABLE_VIDEO_LLM=true \
+  -e OUTCOME_MODEL_ID=HuggingFaceTB/SmolVLM2-500M-Video-Instruct \
   padeliq-analysis
 ```
 
@@ -39,4 +40,4 @@ docker run --rm -p 8080:8080 \
 
 The current in-memory job store is suitable for a controlled prototype. Production requires object storage, a persistent queue/database, authentication, file limits and scheduled deletion of raw footage.
 
-The 2B video-language model is intended for prototype feedback. It does not yet make reliable shot-by-shot calls; those require a labelled padel dataset and a dedicated temporal classifier. On free CPU hosting, the first model download and each inference can take several minutes.
+The lightweight outcome model is intended for cautious rally-ending estimates. It does not make reliable shot-by-shot calls; those require a labelled padel dataset and a dedicated temporal classifier. Results below the confidence threshold are returned as unknown rather than forced into won/lost.

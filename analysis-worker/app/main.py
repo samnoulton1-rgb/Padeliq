@@ -39,12 +39,51 @@ DIAGNOSTIC_ROOT = Path(tempfile.gettempdir()) / "padeliq-diagnostics"
 diagnostics: dict[str, dict[str, str | Path | datetime]] = {}
 
 
+def restore_diagnostics() -> None:
+    """Recover best-effort retained videos and completed outcome jobs after an app restart."""
+    if not DIAGNOSTIC_ROOT.exists():
+        return
+    for directory in DIAGNOSTIC_ROOT.iterdir():
+        metadata_path = directory / "metadata.json"
+        if not directory.is_dir() or not metadata_path.exists():
+            continue
+        try:
+            metadata = json.loads(metadata_path.read_text())
+            expires_at = datetime.fromisoformat(metadata["expires_at"])
+            if expires_at <= datetime.now(timezone.utc):
+                shutil.rmtree(directory, ignore_errors=True)
+                continue
+            diagnostics[directory.name] = {
+                "directory": directory,
+                "video": directory / metadata["video_filename"],
+                "overlay": directory / "tracking-diagnostic.mp4",
+                "expires_at": expires_at,
+            }
+            outcome_path = directory / "outcomes.json"
+            if outcome_path.exists():
+                outcome_jobs[directory.name] = OutcomeJobState.model_validate_json(outcome_path.read_text())
+        except Exception:
+            shutil.rmtree(directory, ignore_errors=True)
+
+
+def persist_outcome_state(token: str) -> None:
+    item = diagnostics.get(token)
+    state = outcome_jobs.get(token)
+    if item is None or state is None:
+        return
+    (Path(item["directory"]) / "outcomes.json").write_text(state.model_dump_json())
+
+
 def cleanup_expired_diagnostics() -> None:
     now = datetime.now(timezone.utc)
     for token, item in list(diagnostics.items()):
         if item["expires_at"] <= now:
             shutil.rmtree(Path(item["directory"]), ignore_errors=True)
             diagnostics.pop(token, None)
+            outcome_jobs.pop(token, None)
+
+
+restore_diagnostics()
 
 
 def update_job(job_id: str, **values) -> None:
@@ -84,6 +123,9 @@ def run_job(job_id: str, video_path: Path, calibration: CourtCalibration, retain
                 "overlay": retained_directory / "tracking-diagnostic.mp4",
                 "expires_at": expires_at,
             }
+            (retained_directory / "metadata.json").write_text(
+                json.dumps({"video_filename": video_path.name, "expires_at": expires_at.isoformat()})
+            )
             result.diagnostic_token = token
             result.diagnostic_available_until = expires_at.isoformat()
         update_job(job_id, status="complete", progress=100, message="Complete", result=result)
@@ -106,21 +148,25 @@ def run_outcome_job(
         outcome_jobs[token] = outcome_jobs[token].model_copy(
             update={"status": "processing", "progress": 10, "message": "Finding likely rally endings"}
         )
+        persist_outcome_state(token)
         if feedback_analyzer is None:
             feedback_analyzer = VideoFeedbackAnalyzer()
         def report_progress(completed: int, message: str) -> None:
-            total = max(1, int(os.getenv("MAX_RALLY_CANDIDATES", "16")))
+            total = max(1, int(os.getenv("MAX_RALLY_CANDIDATES", "8")))
             progress = min(95, 15 + round(80 * completed / total))
             outcome_jobs[token] = outcome_jobs[token].model_copy(update={"progress": progress, "message": message})
+            persist_outcome_state(token)
         with model_lock:
             rallies = feedback_analyzer.analyze_rallies(video_path, positions, partner_positions or [], report_progress)
         outcome_jobs[token] = outcome_jobs[token].model_copy(
             update={"status": "complete", "progress": 100, "message": "Outcome estimates ready", "rallies": rallies}
         )
+        persist_outcome_state(token)
     except Exception as exc:
         outcome_jobs[token] = outcome_jobs[token].model_copy(
             update={"status": "failed", "message": "Outcome analysis failed", "error": str(exc)}
         )
+        persist_outcome_state(token)
     finally:
         if cleanup_directory:
             shutil.rmtree(video_path.parent, ignore_errors=True)
@@ -131,9 +177,9 @@ def health() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "service": "padeliq-analysis",
-        "version": "0.6.6",
+        "version": "0.7.0",
         "tracking_model": os.getenv("MODEL_ID", "PekingU/rtdetr_r50vd"),
-        "video_llm": os.getenv("VLM_MODEL_ID", "Qwen/Qwen3-VL-2B-Instruct"),
+        "video_llm": os.getenv("OUTCOME_MODEL_ID", "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"),
         "video_llm_enabled": os.getenv("ENABLE_VIDEO_LLM", "true").lower() == "true",
     }
 
@@ -204,8 +250,14 @@ async def create_retained_outcome_job(
 
 @app.get("/outcomes/{token}", response_model=OutcomeJobState)
 def get_outcomes(token: str) -> OutcomeJobState:
+    cleanup_expired_diagnostics()
     if token not in outcome_jobs:
-        raise HTTPException(404, "Outcome analysis not found")
+        item = diagnostics.get(token)
+        outcome_path = Path(item["directory"]) / "outcomes.json" if item else None
+        if outcome_path and outcome_path.exists():
+            outcome_jobs[token] = OutcomeJobState.model_validate_json(outcome_path.read_text())
+        else:
+            raise HTTPException(404, "Outcome analysis not found or retained video expired")
     return outcome_jobs[token]
 
 

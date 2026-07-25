@@ -17,23 +17,25 @@ class VideoFeedbackAnalyzer:
     """Produces cautious coaching notes from sampled frames plus measured CV metrics."""
 
     def __init__(self) -> None:
-        self.model_id = os.getenv("VLM_MODEL_ID", "Qwen/Qwen3-VL-2B-Instruct")
+        self.model_id = os.getenv("OUTCOME_MODEL_ID", "HuggingFaceTB/SmolVLM2-500M-Video-Instruct")
         self.model = None
         self.processor = None
+        self.device = None
 
     def _load(self) -> None:
         if self.model is not None:
             return
         import torch
-        from transformers import AutoModelForMultimodalLM, AutoProcessor
+        from transformers import AutoModelForImageTextToText, AutoProcessor
 
+        torch.set_num_threads(max(1, int(os.getenv("TORCH_CPU_THREADS", "2"))))
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.processor = AutoProcessor.from_pretrained(self.model_id)
-        self.model = AutoModelForMultimodalLM.from_pretrained(
+        self.model = AutoModelForImageTextToText.from_pretrained(
             self.model_id,
-            torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto",
+            dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             low_cpu_mem_usage=True,
-        )
+        ).to(self.device).eval()
 
     @staticmethod
     def _frames(video_path: Path, count: int = 8) -> list[Image.Image]:
@@ -71,10 +73,14 @@ class VideoFeedbackAnalyzer:
         samples: list[tuple[float, float]] = []
         frame_index = 0
         while True:
-            ok, frame = capture.read()
+            ok = capture.grab()
             if not ok:
                 break
             if frame_index % sample_every:
+                frame_index += 1
+                continue
+            ok, frame = capture.retrieve()
+            if not ok:
                 frame_index += 1
                 continue
             gray = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (192, 108))
@@ -111,7 +117,12 @@ class VideoFeedbackAnalyzer:
                 merged[-1] = (merged[-1][0], window[1])
             else:
                 merged.append(window)
-        return merged[: max(1, int(os.getenv("MAX_RALLY_CANDIDATES", "16")))]
+        limit = max(1, int(os.getenv("MAX_RALLY_CANDIDATES", "8")))
+        if len(merged) <= limit:
+            return merged
+        # Cover the full match instead of reviewing only the earliest rallies.
+        selected = np.linspace(0, len(merged) - 1, limit).round().astype(int)
+        return [merged[index] for index in sorted(set(selected.tolist()))]
 
     @staticmethod
     def _window_frames(video_path: Path, start: float, end: float, count: int = 3) -> list[Image.Image]:
@@ -124,7 +135,7 @@ class VideoFeedbackAnalyzer:
             if not ok:
                 continue
             height, width = frame.shape[:2]
-            scale = min(1.0, 640 / max(height, width))
+            scale = min(1.0, 384 / max(height, width))
             if scale < 1:
                 frame = cv2.resize(frame, (round(width * scale), round(height * scale)))
             images.append(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
@@ -141,32 +152,43 @@ class VideoFeedbackAnalyzer:
         self._load()
         windows = self._rally_windows(marked_video_path)
         outcomes: list[RallyOutcome] = []
-        for batch_start in range(0, len(windows), 4):
-            batch = windows[batch_start : batch_start + 4]
+        import torch
+
+        for batch_start in range(0, len(windows), 2):
+            batch = windows[batch_start : batch_start + 2]
             content: list[dict] = []
             for local_index, (start, end) in enumerate(batch):
                 rally_index = batch_start + local_index + 1
                 content.append({"type": "text", "text": f"Candidate rally {rally_index}, ending near {end:.1f} seconds. The selected player is enclosed by the GREEN tracking box."})
                 content.extend({"type": "image", "image": image} for image in self._window_frames(marked_video_path, start, end))
-            prompt = f"""You are reviewing the final seconds of {len(batch)} candidate padel rallies.
-The selected player is marked by a GREEN tracking box. For each candidate, decide whether it visibly ends a rally
-and, only when the evidence is reasonably clear, whether the selected player's team WON or LOST the point.
-Use the ball outcome, final player contact, all four players' reactions and preparation for the next point.
-Never infer an outcome merely from where the selected player stands. If the ball or reactions do not make the
-outcome clear, return unknown. Confidence must reflect visible evidence, not guesswork.
+            prompt = f"""Review the final seconds of {len(batch)} candidate padel rallies.
+The selected player has a GREEN box. Decide if each candidate visibly ends a rally and whether that player's
+team likely won or lost. Use the ball outcome and all players' reactions. If unclear, return unknown.
 
 Return ONLY JSON with this exact shape:
 {{"rallies":[{{"index":{batch_start + 1},"is_rally_end":true,"outcome":"won|lost|unknown","confidence":0.0,"reason":"brief visible evidence"}}]}}
 Return one item for every candidate index from {batch_start + 1} to {batch_start + len(batch)}."""
             content.append({"type": "text", "text": prompt})
-            inputs = self.processor.apply_chat_template(
-                [{"role": "user", "content": content}], tokenize=True, add_generation_prompt=True,
-                return_dict=True, return_tensors="pt"
-            ).to(self.model.device)
-            generated = self.model.generate(**inputs, max_new_tokens=300, do_sample=False)
-            new_tokens = generated[0][inputs["input_ids"].shape[1] :]
-            data = self._json(self.processor.decode(new_tokens, skip_special_tokens=True))
-            by_index = {int(item.get("index", -1)): item for item in data.get("rallies", [])}
+            try:
+                inputs = self.processor.apply_chat_template(
+                    [{"role": "user", "content": content}], tokenize=True, add_generation_prompt=True,
+                    return_dict=True, return_tensors="pt"
+                ).to(self.device)
+                with torch.inference_mode():
+                    generated = self.model.generate(**inputs, max_new_tokens=140, do_sample=False)
+                new_tokens = generated[0][inputs["input_ids"].shape[1] :]
+                data = self._json(self.processor.decode(new_tokens, skip_special_tokens=True))
+                by_index = {int(item.get("index", -1)): item for item in data.get("rallies", [])}
+            except Exception as exc:
+                by_index = {
+                    batch_start + local_index + 1: {
+                        "outcome": "unknown",
+                        "confidence": 0,
+                        "is_rally_end": False,
+                        "reason": f"Video-model batch could not be classified: {type(exc).__name__}",
+                    }
+                    for local_index in range(len(batch))
+                }
             for local_index, (start, end) in enumerate(batch):
                 rally_index = batch_start + local_index + 1
                 item = by_index.get(rally_index, {})

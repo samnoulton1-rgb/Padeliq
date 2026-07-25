@@ -11,3 +11,4 @@ accelerate>=1.9,<2
 Pillow>=11,<13
 supervision==0.26.1
 pydantic-settings==2.10.1
+num2words>=0.5.14,<1
