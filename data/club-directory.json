@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-25T15:19:38+00:00",
+  "generated_at": "2026-07-29T11:39:55+00:00",
   "refresh_interval_days": 3,
   "source": "OpenStreetMap contributors via Overpass API",
   "source_url": "https://www.openstreetmap.org/copyright",
@@ -23,15 +23,26 @@
       "longitude": 1.070586
     },
     {
-      "name": "Instantpadel",
+      "name": "Three Hills Sports Park",
+      "region": "Kent",
+      "area": "Location available on source map",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://www.freedom-leisure.co.uk/centres.asp?section=1188",
+      "source": "https://www.openstreetmap.org/way/21920157",
+      "latitude": 51.087466,
+      "longitude": 1.160214
+    },
+    {
+      "name": "InstantPadel",
       "region": "London",
       "area": "Location available on source map",
       "courts": "See venue",
       "setting": "Outdoor",
-      "website": "https://www.openstreetmap.org/way/1430290620",
-      "source": "https://www.openstreetmap.org/way/1430290620",
-      "latitude": 51.496154,
-      "longitude": -0.048067
+      "website": "https://www.openstreetmap.org/way/1529156261",
+      "source": "https://www.openstreetmap.org/way/1529156261",
+      "latitude": 51.496082,
+      "longitude": -0.048361
     },
     {
       "name": "Padel Pod",
@@ -119,7 +130,7 @@
       "website": "https://www.openstreetmap.org/way/1347753660",
       "source": "https://www.openstreetmap.org/way/1347753660",
       "latitude": 51.556369,
-      "longitude": -0.282586
+      "longitude": -0.282538
     }
   ]
 }
