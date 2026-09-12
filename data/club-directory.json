@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-08T08:10:34+00:00",
+  "generated_at": "2026-09-12T07:59:40+00:00",
   "refresh_interval_days": 3,
   "source": "OpenStreetMap contributors via Overpass API",
   "source_url": "https://www.openstreetmap.org/copyright",
@@ -65,6 +65,17 @@
       "source": "https://www.openstreetmap.org/way/1479188134",
       "latitude": 51.50468,
       "longitude": 0.002363
+    },
+    {
+      "name": "Primo Padel Club",
+      "region": "London",
+      "area": "Location available on source map",
+      "courts": "See venue",
+      "setting": "Outdoor",
+      "website": "https://primopadelclub.co.uk/",
+      "source": "https://www.openstreetmap.org/way/26520883",
+      "latitude": 51.516027,
+      "longitude": 0.062621
     },
     {
       "name": "Rocket Padel",
