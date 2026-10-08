@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-03T09:15:28+00:00",
+  "generated_at": "2026-10-08T10:43:02+00:00",
   "refresh_interval_days": 3,
   "source": "OpenStreetMap contributors via Overpass API",
   "source_url": "https://www.openstreetmap.org/copyright",
@@ -30,7 +30,7 @@
       "setting": "Outdoor",
       "website": "https://www.freedom-leisure.co.uk/centres.asp?section=1188",
       "source": "https://www.openstreetmap.org/way/21920157",
-      "latitude": 51.087466,
+      "latitude": 51.087347,
       "longitude": 1.160214
     },
     {
